@@ -37,11 +37,22 @@ window.FLUENT_ICONS = {
 };
 
 window.renderFluentIcons = function(rootElement = document) {
-  const elements = rootElement.querySelectorAll("[data-fluent]");
+  if (!window.FLUENT_ICONS) return;
+  const elements = rootElement.querySelectorAll ? rootElement.querySelectorAll("[data-fluent]") : [];
   elements.forEach((el) => {
     const iconName = el.getAttribute("data-fluent");
-    if (window.FLUENT_ICONS && window.FLUENT_ICONS[iconName]) {
+    if (window.FLUENT_ICONS[iconName]) {
       el.innerHTML = window.FLUENT_ICONS[iconName];
     }
   });
+  if (rootElement.getAttribute && rootElement.getAttribute("data-fluent")) {
+    const iconName = rootElement.getAttribute("data-fluent");
+    if (window.FLUENT_ICONS[iconName]) {
+      rootElement.innerHTML = window.FLUENT_ICONS[iconName];
+    }
+  }
 };
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.renderFluentIcons();
+});
