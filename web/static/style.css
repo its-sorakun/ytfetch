@@ -966,6 +966,10 @@ body {
   gap: 8px;
 }
 
+.download-clip-accordion {
+  margin-top: -4px;
+}
+
 .accordion-toggle-btn {
   background: transparent;
   border: none;
@@ -993,6 +997,7 @@ body {
 }
 
 .accordion-arrow {
+  display: inline-flex;
   transition: transform 0.25s ease;
 }
 
