@@ -476,6 +476,21 @@ function initializeDownloadHandler() {
   const metricSpeed = document.getElementById("metric-speed");
   const metricEta = document.getElementById("metric-eta");
   const statusMsg = document.getElementById("download-status-msg");
+  const toggleDlClipBtn = document.getElementById("toggle-dl-clip-btn");
+  const dlClipContainer = document.getElementById("dl-clip-container");
+  const dlClipArrow = document.getElementById("dl-clip-arrow");
+  const dlStartTime = document.getElementById("download-start-time");
+  const dlEndTime = document.getElementById("download-end-time");
+
+  if (toggleDlClipBtn && dlClipContainer) {
+    toggleDlClipBtn.addEventListener("click", () => {
+      const isHidden = dlClipContainer.style.display === "none";
+      dlClipContainer.style.display = isHidden ? "block" : "none";
+      if (dlClipArrow) {
+        dlClipArrow.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+      }
+    });
+  }
 
   if (!downloadForm) return;
 
@@ -507,11 +522,18 @@ function initializeDownloadHandler() {
     metricEta.textContent = "Estimating...";
     statusMsg.textContent = "Contacting YouTube servers...";
 
+    const payload = {
+      url,
+      quality: currentQuality,
+      start_time: dlStartTime ? dlStartTime.value.trim() || null : null,
+      end_time: dlEndTime ? dlEndTime.value.trim() || null : null,
+    };
+
     try {
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, quality: currentQuality }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
