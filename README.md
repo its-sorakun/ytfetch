@@ -1,7 +1,7 @@
 <!--
 Implementation details:
 Documentation file outlining project architecture, installation instructions, and operational execution steps.
-Details cover automatic configuration through setup.ps1, manual setup procedures, and runtime stream remuxing.
+Details cover automatic configuration through setup.ps1, manual setup procedures, video downloading, and clip enhancement.
 -->
 
 # YouTube Video Downloader
@@ -15,6 +15,7 @@ A lightweight, modular Python application designed to download YouTube videos in
 - Automated environment provisioning script (`setup.ps1`) for Windows.
 - Clean command-line interface with interactive fallback prompt when no arguments are supplied.
 - Clear transfer metrics (percentage, transfer speed, estimated time remaining).
+- Separate on-demand video clipping and quality enhancement utility (`enhance_clip.py`).
 
 ## Prerequisites
 
@@ -55,7 +56,7 @@ pip install -r requirements.txt
 ffmpeg -version
 ```
 
-## Usage
+## Usage: Downloading Videos
 
 ### 1. Command-Line Argument
 
@@ -86,3 +87,29 @@ Downloaded media files are automatically saved to:
 
 File names are sanitized for Windows filesystems and formatted as `%(title)s.%(ext)s`.
 
+## Video Clipping and Quality Enhancement
+
+The project provides an on-demand clip extractor and enhancer (`enhance_clip.py`) for processing segments from downloaded files without altering original downloads.
+
+### Capabilities
+
+- Fast container-level seeking (`-ss` before `-i`) to seek directly into long files (such as 6-12 hour recordings) without decoding preceding hours.
+- Optional time range selection (specify start and end timestamps or leave blank for full video).
+- High-fidelity perceptual mastering (`CRF 17`, unsharp edge filter, `320k` AAC audio) or custom target bitrate selection (`-b:v`).
+- Automatic collision-free output naming (`_clip_enhanced.mp4` or `_enhanced.mp4`).
+
+### Running the Enhancer
+
+Execute the script with or without a file path argument:
+
+```bash
+python enhance_clip.py "C:\path\to\video.mp4"
+```
+
+If executed without arguments, the script prompts for the input file path (supporting drag-and-drop):
+
+```text
+Enter path to input video file (or drag and drop file here):
+```
+
+Follow the interactive prompts to define start time, end time, and encoding profile.
