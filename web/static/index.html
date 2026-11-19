@@ -4,7 +4,7 @@ Implementation details:
 Single Page Application (SPA) layout for YtFetch.
 Implements Windows 11 Fluent 2 design language with minimal, atmospheric Unsplash-level aesthetics.
 Features an expansive horizontal dual-card architecture with native Microsoft Fluent System Icons,
-clean typography, and distraction-free media management.
+compact loaded media states, real-time download telemetry icons, and non-blocking toast notifications.
 -->
 <html lang="en" data-theme="dark">
 <head>
@@ -22,6 +22,9 @@ clean typography, and distraction-free media management.
   <div class="mica-bloom bloom-primary"></div>
   <div class="mica-bloom bloom-secondary"></div>
   <div class="acrylic-noise-overlay"></div>
+
+  <!-- Non-blocking Fluent Toast Container -->
+  <div class="fluent-toast-container" id="toast-container"></div>
 
   <div class="app-container">
     <!-- Header: Minimal Title Left, Centered Segmented Tabs, Theme Toggle Right -->
@@ -132,7 +135,7 @@ clean typography, and distraction-free media management.
               </div>
               <div class="info-item">
                 <span class="info-icon" data-fluent="developer_board_20_regular"></span>
-                <span class="info-text">Engine: <code>yt-dlp + FFmpeg</code></span>
+                <span class="info-text" id="engine-status-text">Engine: <code>yt-dlp + FFmpeg</code></span>
               </div>
             </div>
 
@@ -140,15 +143,18 @@ clean typography, and distraction-free media management.
               <button type="submit" class="win11-primary-btn" id="start-download-btn">
                 <span class="btn-spinner" id="download-spinner"></span>
                 <span class="btn-icon-wrap" id="download-btn-icon" data-fluent="arrow_download_20_filled"></span>
-                <span class="btn-text">Start Download</span>
+                <span class="btn-text" id="download-btn-text">Start Download</span>
               </button>
             </div>
           </form>
 
-          <!-- Live Download Status Card -->
+          <!-- Live Download Status Card with Fluent Icons -->
           <div class="status-card" id="download-status-card" style="display: none;">
             <div class="status-header">
-              <span class="status-badge" id="download-status-badge">Connecting</span>
+              <span class="status-badge" id="download-status-badge">
+                <span class="status-badge-icon" id="download-status-badge-icon" data-fluent="arrow_download_20_regular"></span>
+                <span id="download-status-badge-text">Connecting</span>
+              </span>
               <span class="status-filename" id="download-filename-display">Resolving stream metadata...</span>
             </div>
 
@@ -158,15 +164,24 @@ clean typography, and distraction-free media management.
 
             <div class="status-metrics">
               <div class="metric-block">
-                <span class="metric-label">Progress</span>
+                <span class="metric-label">
+                  <span class="metric-icon" data-fluent="sparkle_20_regular"></span>
+                  <span>Progress</span>
+                </span>
                 <span class="metric-value" id="metric-percent">0%</span>
               </div>
               <div class="metric-block">
-                <span class="metric-label">Transfer Speed</span>
+                <span class="metric-label">
+                  <span class="metric-icon" data-fluent="flash_20_regular"></span>
+                  <span>Transfer Speed</span>
+                </span>
                 <span class="metric-value" id="metric-speed">--</span>
               </div>
               <div class="metric-block">
-                <span class="metric-label">ETA</span>
+                <span class="metric-label">
+                  <span class="metric-icon" data-fluent="gauge_20_regular"></span>
+                  <span>ETA</span>
+                </span>
                 <span class="metric-value" id="metric-eta">--</span>
               </div>
             </div>
@@ -178,50 +193,62 @@ clean typography, and distraction-free media management.
         <div class="tab-panel" id="tab-enhancer" role="tabpanel">
           <div class="panel-hero">
             <h2 class="panel-title">Video Clipper & Enhancer</h2>
-            <p class="panel-subtitle">Upload or select a local video, preview frames, clip exact intervals, and remaster bitrates.</p>
+            <p class="panel-subtitle">Upload or select a local video, preview frames, clip exact intervals, and remaster with dedicated GPU acceleration.</p>
           </div>
 
           <form class="action-form" id="enhance-form">
-            <!-- Video Source Dropzone -->
-            <div class="form-field-group">
+            <!-- Source Selection Group: Collapses when file is loaded -->
+            <div class="form-field-group" id="source-selection-group">
               <label class="field-label">Source Video File</label>
 
-              <div class="upload-dropzone" id="upload-dropzone">
-                <input type="file" id="video-file-input" accept="video/mp4,video/mkv,video/webm,video/avi,video/quicktime" class="hidden-file-input">
-                <div class="dropzone-content">
-                  <div class="dropzone-icon" data-fluent="arrow_upload_24_regular"></div>
-                  <div class="dropzone-text-group">
-                    <span class="dropzone-primary-text">Drag and drop video here, or <span class="accent-link">Browse files</span></span>
-                    <span class="dropzone-secondary-text">MP4, MKV, WebM, MOV, AVI</span>
-                  </div>
+              <!-- Loaded compact summary (Shown when file is selected/previewed) -->
+              <div class="loaded-source-bar" id="loaded-source-bar" style="display: none;">
+                <div class="loaded-source-info">
+                  <span class="loaded-source-icon" data-fluent="video_clip_20_regular"></span>
+                  <span class="loaded-source-name" id="loaded-source-name">video.mp4</span>
                 </div>
-                <div class="upload-progress-overlay" id="upload-progress-overlay" style="display: none;">
-                  <span class="btn-spinner active"></span>
-                  <span id="upload-progress-text">Uploading to suite...</span>
-                </div>
+                <button type="button" class="loaded-change-btn" id="change-source-file-btn">Change file</button>
               </div>
 
-              <!-- Manual Path Input Accordion -->
-              <div class="manual-path-accordion">
-                <button type="button" class="accordion-toggle-btn" id="toggle-path-input-btn">
-                  <span data-fluent="folder_20_regular" class="accordion-btn-icon"></span>
-                  <span>Enter absolute file path manually</span>
-                  <span data-fluent="chevron_down_20_regular" class="accordion-arrow" id="accordion-arrow"></span>
-                </button>
+              <!-- Full dropzone and manual path picker (Hidden when file is loaded) -->
+              <div id="source-picker-container">
+                <div class="upload-dropzone" id="upload-dropzone">
+                  <input type="file" id="video-file-input" accept="video/mp4,video/mkv,video/webm,video/avi,video/quicktime" class="hidden-file-input">
+                  <div class="dropzone-content">
+                    <div class="dropzone-icon" data-fluent="arrow_upload_24_regular"></div>
+                    <div class="dropzone-text-group">
+                      <span class="dropzone-primary-text">Drag and drop video here, or <span class="accent-link">Browse files</span></span>
+                      <span class="dropzone-secondary-text">MP4, MKV, WebM, MOV, AVI</span>
+                    </div>
+                  </div>
+                  <div class="upload-progress-overlay" id="upload-progress-overlay" style="display: none;">
+                    <span class="btn-spinner active"></span>
+                    <span id="upload-progress-text">Uploading to suite...</span>
+                  </div>
+                </div>
 
-                <div class="accordion-content" id="manual-path-container" style="display: none;">
-                  <div class="acrylic-input-wrapper compact-wrapper file-input-wrapper" id="file-input-wrapper">
-                    <div class="ripple-host" id="file-ripple-host"></div>
-                    <div class="conic-glow-border"></div>
-                    <input 
-                      type="text" 
-                      class="acrylic-input-core" 
-                      id="enhance-source-input" 
-                      placeholder=" "
-                      autocomplete="off"
-                      spellcheck="false"
-                    />
-                    <label class="floating-acrylic-label" for="enhance-source-input">Absolute path to video...</label>
+                <!-- Manual Path Input Accordion -->
+                <div class="manual-path-accordion">
+                  <button type="button" class="accordion-toggle-btn" id="toggle-path-input-btn">
+                    <span data-fluent="folder_20_regular" class="accordion-btn-icon"></span>
+                    <span>Enter absolute file path manually</span>
+                    <span data-fluent="chevron_down_20_regular" class="accordion-arrow" id="accordion-arrow"></span>
+                  </button>
+
+                  <div class="accordion-content" id="manual-path-container" style="display: none;">
+                    <div class="acrylic-input-wrapper compact-wrapper file-input-wrapper" id="file-input-wrapper">
+                      <div class="ripple-host" id="file-ripple-host"></div>
+                      <div class="conic-glow-border"></div>
+                      <input 
+                        type="text" 
+                        class="acrylic-input-core" 
+                        id="enhance-source-input" 
+                        placeholder=" "
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <label class="floating-acrylic-label" for="enhance-source-input">Absolute path to video...</label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -288,7 +315,7 @@ clean typography, and distraction-free media management.
 
             <!-- Mastering Profile Selector -->
             <div class="form-field-group">
-              <label class="field-label">Mastering Profile</label>
+              <label class="field-label">Mastering Profile (GPU Accelerated)</label>
               <div class="profile-selector">
                 <label class="profile-option">
                   <input type="radio" name="enhance-mode" value="crf" checked id="mode-crf">
@@ -300,7 +327,7 @@ clean typography, and distraction-free media management.
                       </div>
                       <span class="badge-mini">Recommended</span>
                     </div>
-                    <span class="profile-desc">CRF 17, slow preset, unsharp edge filter, 320k AAC audio</span>
+                    <span class="profile-desc">Dedicated GPU NVENC, unsharp edge filter, 320k AAC audio</span>
                   </div>
                 </label>
 
@@ -339,7 +366,7 @@ clean typography, and distraction-free media management.
               <button type="submit" class="win11-primary-btn btn-enhance-submit" id="start-enhance-btn">
                 <span class="btn-spinner" id="enhance-spinner"></span>
                 <span class="btn-icon-wrap" id="enhance-btn-icon" data-fluent="wand_20_filled"></span>
-                <span class="btn-text">Process & Enhance Video</span>
+                <span class="btn-text" id="enhance-btn-text">Process & Enhance Video</span>
               </button>
             </div>
           </form>
@@ -347,7 +374,10 @@ clean typography, and distraction-free media management.
           <!-- Live Enhancement Status Card -->
           <div class="status-card" id="enhance-status-card" style="display: none;">
             <div class="status-header">
-              <span class="status-badge" id="enhance-status-badge">Processing</span>
+              <span class="status-badge" id="enhance-status-badge">
+                <span class="status-badge-icon" data-fluent="wand_20_regular"></span>
+                <span>Processing</span>
+              </span>
               <span class="status-filename" id="enhance-filename-display">Running FFmpeg...</span>
             </div>
             <p class="status-message" id="enhance-status-msg">Initializing...</p>
