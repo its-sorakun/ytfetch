@@ -11,11 +11,13 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
 import threading
 from typing import Optional
+from urllib.parse import unquote
 import uuid
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
@@ -34,7 +36,17 @@ from core.enhancer import (
     generate_output_path,
     construct_ffmpeg_command,
     execute_ffmpeg_process,
+    detect_hardware_encoder,
 )
+
+ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+
+
+def clean_ansi(text: str) -> str:
+    """
+    Strips terminal ANSI color escape sequences from raw CLI output strings.
+    """
+    return ANSI_ESCAPE_PATTERN.sub('', text).strip() if text else text
 
 app = FastAPI(title="YtFetch Web API")
 
@@ -95,9 +107,9 @@ def run_download_worker(job_id: str, target_url: str, output_directory: Path, qu
     """
     def progress_callback(status_data: dict) -> None:
         status = status_data.get("status", "downloading")
-        percent = status_data.get("_percent_str", "0%").strip()
-        speed = status_data.get("_speed_str", "N/A").strip()
-        eta = status_data.get("_eta_str", "N/A").strip()
+        percent = clean_ansi(status_data.get("_percent_str", "0%"))
+        speed = clean_ansi(status_data.get("_speed_str", "N/A"))
+        eta = clean_ansi(status_data.get("_eta_str", "N/A"))
         filename = status_data.get("filename", "")
 
         update_job_status(
@@ -332,13 +344,22 @@ async def upload_video_file(file: UploadFile = File(...)):
 async def stream_local_video(path: str = Query(..., description="Absolute path to local media file")):
     """
     Provides streaming responses for local media files to allow real-time browser video playback and preview.
+    Resolves URL-encoded characters and provides fallback resolution for files with alternative extensions.
     """
-    resolved_path = Path(path.strip("\"'")).resolve()
+    decoded_path = unquote(path.strip("\"'"))
+    resolved_path = Path(decoded_path).resolve()
 
     if not resolved_path.is_file():
-        raise HTTPException(status_code=404, detail="Requested media file not found.")
+        parent_dir = resolved_path.parent
+        if parent_dir.is_dir():
+            candidates = [f for f in parent_dir.glob(f"{resolved_path.stem}.*") if f.is_file()]
+            if candidates:
+                resolved_path = candidates[0]
 
-    valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v"}
+    if not resolved_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Requested media file not found: {resolved_path.name}")
+
+    valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".m4a", ".mp3", ".aac", ".flac", ".wav"}
     if resolved_path.suffix.lower() not in valid_extensions:
         raise HTTPException(status_code=400, detail="Invalid media file extension.")
 
@@ -348,6 +369,12 @@ async def stream_local_video(path: str = Query(..., description="Absolute path t
         ".webm": "video/webm",
         ".mkv": "video/x-matroska",
         ".mov": "video/quicktime",
+        ".avi": "video/x-msvideo",
+        ".m4a": "audio/mp4",
+        ".mp3": "audio/mpeg",
+        ".aac": "audio/aac",
+        ".flac": "audio/flac",
+        ".wav": "audio/wav",
     }
     media_type = extension_map.get(resolved_path.suffix.lower(), "video/mp4")
 
@@ -362,11 +389,25 @@ async def stream_local_video(path: str = Query(..., description="Absolute path t
 async def reveal_file_in_explorer(request: RevealRequest):
     """
     Invokes the Windows File Explorer process highlighting the designated file on the host filesystem.
+    Includes fallback resolution to parent folder if individual file was moved or renamed.
     """
-    cleaned_path = request.path.strip("\"'")
+    cleaned_path = unquote(request.path.strip("\"'"))
     target_path = Path(cleaned_path).resolve()
 
     if not target_path.exists():
+        parent_dir = target_path.parent
+        if parent_dir.is_dir():
+            candidates = [f for f in parent_dir.glob(f"{target_path.stem}.*") if f.is_file()]
+            if candidates:
+                target_path = candidates[0]
+
+    if not target_path.exists():
+        if target_path.parent.is_dir():
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer.exe", str(target_path.parent)])
+            else:
+                subprocess.Popen(["xdg-open", str(target_path.parent)])
+            return {"status": "success", "message": f"Opened folder containing {target_path.name}."}
         raise HTTPException(status_code=404, detail="Designated file does not exist on filesystem.")
 
     try:
@@ -377,6 +418,29 @@ async def reveal_file_in_explorer(request: RevealRequest):
         return {"status": "success", "message": f"Revealed {target_path.name} in Explorer."}
     except Exception as execution_error:
         raise HTTPException(status_code=500, detail=f"Failed to launch explorer: {execution_error}")
+
+
+@app.get("/api/system-status")
+async def get_system_status():
+    """
+    Supplies hardware acceleration status and destination storage path metadata.
+    """
+    encoder, label, desc = detect_hardware_encoder()
+    download_folder = resolve_download_directory()
+    return {
+        "encoder": encoder,
+        "hardware_label": label,
+        "description": desc,
+        "downloads_directory": str(download_folder),
+    }
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+async def chrome_devtools_manifest():
+    """
+    Suppresses 404 logging for Chrome DevTools specific probe requests.
+    """
+    return {}
 
 
 @app.post("/api/open-downloads-folder")
