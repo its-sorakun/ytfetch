@@ -3,7 +3,7 @@ Implementation details:
 Client-side presentation logic managing dual-theme states, animated tab navigation,
 dynamic click ripples, video file uploads with drag-and-drop, inline video playback previews,
 timecode synchronization, Windows Explorer file revelation, sorting controls,
-and Server-Sent Events (SSE) telemetry listeners.
+non-blocking Fluent toast notifications, compact preview states, and Server-Sent Events (SSE) telemetry listeners.
 Integrates native Microsoft Fluent System Icons for authentic Windows 11 aesthetics.
 */
 
@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeEnhanceHandler();
   initializeRecentSortHandler();
   loadRecentDownloads();
+  loadSystemStatus();
 
   const refreshBtn = document.getElementById("refresh-recent-btn");
   if (refreshBtn) {
@@ -37,6 +38,49 @@ function applyFluentIcons(root = document) {
   if (typeof window.renderFluentIcons === "function") {
     window.renderFluentIcons(root);
   }
+}
+
+/* Query hardware status to surface dedicated GPU encoder info in the UI */
+async function loadSystemStatus() {
+  const engineText = document.getElementById("engine-status-text");
+  if (!engineText) return;
+  try {
+    const res = await fetch("/api/system-status");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.device) {
+        engineText.innerHTML = `GPU: <code>${data.device}</code> (${data.encoder})`;
+      }
+    }
+  } catch {}
+}
+
+/* Windows 11 Fluent Toast Notifications */
+function showToast(message, type = "info") {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `fluent-toast toast-${type}`;
+
+  let iconName = "sparkle_20_regular";
+  if (type === "success") iconName = "checkmark_20_regular";
+  else if (type === "error") iconName = "folder_open_20_regular";
+
+  toast.innerHTML = `
+    <span class="fluent-toast-icon" data-fluent="${iconName}"></span>
+    <span class="fluent-toast-content">${message}</span>
+  `;
+
+  container.appendChild(toast);
+  applyFluentIcons(toast);
+
+  setTimeout(() => {
+    toast.classList.add("hiding");
+    setTimeout(() => {
+      toast.remove();
+    }, 260);
+  }, 3200);
 }
 
 /* Light and Dark Theme Controller */
@@ -239,6 +283,16 @@ function initializeVideoUploader() {
   const progressOverlay = document.getElementById("upload-progress-overlay");
   const progressText = document.getElementById("upload-progress-text");
   const sourceInput = document.getElementById("enhance-source-input");
+  const changeSourceBtn = document.getElementById("change-source-file-btn");
+  const sourcePickerContainer = document.getElementById("source-picker-container");
+  const loadedSourceBar = document.getElementById("loaded-source-bar");
+
+  if (changeSourceBtn && sourcePickerContainer && loadedSourceBar) {
+    changeSourceBtn.addEventListener("click", () => {
+      loadedSourceBar.style.display = "none";
+      sourcePickerContainer.style.display = "block";
+    });
+  }
 
   if (!dropzone || !fileInput) return;
 
@@ -294,8 +348,9 @@ function initializeVideoUploader() {
 
       loadVideoPreview(result.path, result.filename);
       loadRecentDownloads();
+      showToast(`Uploaded ${result.filename}`, "success");
     } catch (err) {
-      alert(`Upload error: ${err.message}`);
+      showToast(`Upload error: ${err.message}`, "error");
     } finally {
       progressOverlay.style.display = "none";
       fileInput.value = "";
@@ -352,18 +407,30 @@ function initializeVideoPreviewPlayer() {
 
 /* Video Preview Loader */
 function loadVideoPreview(absolutePath, displayName) {
+  const sourcePickerContainer = document.getElementById("source-picker-container");
+  const loadedSourceBar = document.getElementById("loaded-source-bar");
+  const loadedSourceName = document.getElementById("loaded-source-name");
   const previewCard = document.getElementById("video-preview-card");
   const filenameText = document.getElementById("preview-filename-text");
   const videoPlayer = document.getElementById("inline-video-player");
 
-  if (!previewCard || !videoPlayer) return;
+  if (sourcePickerContainer) sourcePickerContainer.style.display = "none";
+  if (loadedSourceBar) loadedSourceBar.style.display = "flex";
+  if (loadedSourceName) {
+    loadedSourceName.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
+  }
 
-  previewCard.style.display = "flex";
-  filenameText.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
+  if (previewCard && videoPlayer) {
+    previewCard.style.display = "flex";
+    if (filenameText) {
+      filenameText.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
+    }
 
-  const streamUrl = `/api/stream-video?path=${encodeURIComponent(absolutePath)}`;
-  videoPlayer.src = streamUrl;
-  videoPlayer.load();
+    const streamUrl = `/api/stream-video?path=${encodeURIComponent(absolutePath)}`;
+    videoPlayer.src = streamUrl;
+    videoPlayer.load();
+  }
+  applyFluentIcons(loadedSourceBar);
 }
 
 /* Download Submission and SSE Progress Listener */
@@ -371,11 +438,14 @@ function initializeDownloadHandler() {
   const downloadForm = document.getElementById("download-form");
   const urlInput = document.getElementById("youtube-url-input");
   const submitBtn = document.getElementById("start-download-btn");
+  const submitBtnText = document.getElementById("download-btn-text");
   const spinner = document.getElementById("download-spinner");
   const btnIcon = document.getElementById("download-btn-icon");
 
   const statusCard = document.getElementById("download-status-card");
   const statusBadge = document.getElementById("download-status-badge");
+  const statusBadgeIcon = document.getElementById("download-status-badge-icon");
+  const statusBadgeText = document.getElementById("download-status-badge-text");
   const filenameDisplay = document.getElementById("download-filename-display");
   const progressBar = document.getElementById("download-progress-bar");
   const metricPercent = document.getElementById("metric-percent");
@@ -385,18 +455,27 @@ function initializeDownloadHandler() {
 
   if (!downloadForm) return;
 
+  function updateDownloadBadge(statusText, badgeClass = "status-badge", iconName = "arrow_download_20_regular") {
+    if (statusBadge) statusBadge.className = badgeClass;
+    if (statusBadgeText) statusBadgeText.textContent = statusText;
+    if (statusBadgeIcon) {
+      statusBadgeIcon.setAttribute("data-fluent", iconName);
+      applyFluentIcons(statusBadge);
+    }
+  }
+
   downloadForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const url = urlInput.value.trim();
     if (!url) return;
 
     submitBtn.disabled = true;
+    if (submitBtnText) submitBtnText.textContent = "Downloading...";
     spinner.classList.add("active");
     if (btnIcon) btnIcon.style.display = "none";
     statusCard.style.display = "flex";
 
-    statusBadge.className = "status-badge";
-    statusBadge.textContent = "Connecting";
+    updateDownloadBadge("Connecting", "status-badge", "arrow_download_20_regular");
     filenameDisplay.textContent = "Resolving stream metadata...";
     progressBar.style.width = "0%";
     metricPercent.textContent = "0%";
@@ -419,12 +498,13 @@ function initializeDownloadHandler() {
       const { job_id } = await response.json();
       attachDownloadEventSource(job_id);
     } catch (err) {
-      statusBadge.className = "status-badge failed";
-      statusBadge.textContent = "Error";
+      updateDownloadBadge("Error", "status-badge failed", "arrow_download_20_regular");
       statusMsg.textContent = err.message;
       submitBtn.disabled = false;
+      if (submitBtnText) submitBtnText.textContent = "Start Download";
       spinner.classList.remove("active");
       if (btnIcon) btnIcon.style.display = "inline-flex";
+      showToast(err.message, "error");
     }
   });
 
@@ -436,8 +516,7 @@ function initializeDownloadHandler() {
         const data = JSON.parse(event.data);
 
         if (data.status === "downloading" || data.status === "starting") {
-          statusBadge.className = "status-badge";
-          statusBadge.textContent = "Downloading";
+          updateDownloadBadge("Downloading", "status-badge", "arrow_download_20_regular");
 
           if (data.filename) filenameDisplay.textContent = data.filename;
           if (data.percent) {
@@ -449,29 +528,31 @@ function initializeDownloadHandler() {
           if (data.eta) metricEta.textContent = data.eta;
           if (data.message) statusMsg.textContent = data.message;
         } else if (data.status === "finished") {
-          statusBadge.textContent = "Remuxing";
+          updateDownloadBadge("Remuxing", "status-badge", "sparkle_20_regular");
           statusMsg.textContent = "Streams downloaded. Merging video and audio via FFmpeg...";
           progressBar.style.width = "99%";
         } else if (data.status === "completed") {
-          statusBadge.className = "status-badge completed";
-          statusBadge.textContent = "Done";
+          updateDownloadBadge("Done", "status-badge completed", "checkmark_20_regular");
           progressBar.style.width = "100%";
           metricPercent.textContent = "100%";
           metricEta.textContent = "00:00";
           statusMsg.textContent = "Video successfully saved into Downloads/ytdownload!";
           submitBtn.disabled = false;
+          if (submitBtnText) submitBtnText.textContent = "Start Download";
           spinner.classList.remove("active");
           if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
           loadRecentDownloads();
+          showToast("Video downloaded successfully!", "success");
         } else if (data.status === "failed") {
-          statusBadge.className = "status-badge failed";
-          statusBadge.textContent = "Failed";
+          updateDownloadBadge("Failed", "status-badge failed", "arrow_download_20_regular");
           statusMsg.textContent = data.error || "An error occurred during extraction.";
           submitBtn.disabled = false;
+          if (submitBtnText) submitBtnText.textContent = "Start Download";
           spinner.classList.remove("active");
           if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
+          showToast(data.error || "Download failed.", "error");
         }
       } catch {
         // Continue processing
@@ -481,6 +562,7 @@ function initializeDownloadHandler() {
     eventSource.onerror = () => {
       eventSource.close();
       submitBtn.disabled = false;
+      if (submitBtnText) submitBtnText.textContent = "Start Download";
       spinner.classList.remove("active");
       if (btnIcon) btnIcon.style.display = "inline-flex";
     };
@@ -512,7 +594,7 @@ function initializeEnhanceHandler() {
     e.preventDefault();
     const sourcePath = sourceInput.value.trim();
     if (!sourcePath) {
-      alert("Please upload a video file or provide an absolute path first.");
+      showToast("Please upload a video file or provide an absolute path first.", "error");
       return;
     }
 
@@ -557,6 +639,7 @@ function initializeEnhanceHandler() {
       submitBtn.disabled = false;
       spinner.classList.remove("active");
       if (btnIcon) btnIcon.style.display = "inline-flex";
+      showToast(err.message, "error");
     }
   });
 
@@ -592,6 +675,7 @@ function initializeEnhanceHandler() {
           if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
           loadRecentDownloads();
+          showToast("Video processing completed successfully!", "success");
         } else if (data.status === "failed") {
           statusBadge.className = "status-badge failed";
           statusBadge.textContent = "Failed";
@@ -600,6 +684,7 @@ function initializeEnhanceHandler() {
           spinner.classList.remove("active");
           if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
+          showToast(data.error || "Video enhancement failed.", "error");
         }
       } catch {
         // Continue processing
@@ -803,10 +888,12 @@ async function revealFileInExplorer(filePath, buttonElement) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      alert(`Explorer error: ${errorData.detail}`);
+      showToast(`Explorer: ${errorData.detail || "Item not found"}`, "error");
+    } else {
+      showToast("Revealed item in Windows File Explorer", "success");
     }
   } catch (err) {
-    alert(`Could not reveal in Explorer: ${err.message}`);
+    showToast(`Could not reveal in Explorer: ${err.message}`, "error");
   }
 }
 
