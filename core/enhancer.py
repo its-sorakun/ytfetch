@@ -157,13 +157,22 @@ def construct_ffmpeg_command(
         "-nostats",
     ]
 
-    if start_time:
-        command.extend(["-ss", start_time])
+    start_sec = parse_time_to_seconds(start_time)
+    end_sec = parse_time_to_seconds(end_time)
 
-    if end_time:
-        command.extend(["-to", end_time])
+    # Placing -ss before -i triggers input demuxer seeking directly to the nearest keyframe.
+    if start_sec is not None and start_sec > 0:
+        command.extend(["-ss", str(start_sec)])
 
     command.extend(["-i", str(source_file)])
+
+    # Using -t with computed duration guarantees exact clipping boundaries without ambiguity across FFmpeg versions.
+    if end_sec is not None:
+        if start_sec is not None and start_sec > 0:
+            duration_sec = max(0.1, end_sec - start_sec)
+            command.extend(["-t", str(duration_sec)])
+        else:
+            command.extend(["-t", str(end_sec)])
 
     if settings.get("filter"):
         command.extend(["-vf", settings["filter"]])
