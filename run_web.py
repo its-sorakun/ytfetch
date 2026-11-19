@@ -60,7 +60,13 @@ def start_server() -> None:
     print("=" * 60)
 
     open_browser_delayed(local_url, delay_seconds=1.2)
-    uvicorn.run("web.app:app", host=host, port=resolved_port, reload=False)
+    uvicorn.run(
+        "web.app:app",
+        host=host,
+        port=resolved_port,
+        reload=True,
+        reload_dirs=["web", "core"],
+    )
 
 
 if __name__ == "__main__":
