@@ -85,3 +85,4 @@ Downloaded media files are automatically saved to:
 - Linux/macOS: `~/Downloads/ytdownload/`
 
 File names are sanitized for Windows filesystems and formatted as `%(title)s.%(ext)s`.
+
