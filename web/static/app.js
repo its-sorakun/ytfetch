@@ -378,6 +378,15 @@ function initializeVideoPreviewPlayer() {
     return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   }
 
+  const videoErrorFallback = document.getElementById("video-error-fallback");
+
+  videoPlayer.addEventListener("error", () => {
+    if (videoErrorFallback) {
+      videoErrorFallback.style.display = "flex";
+    }
+    videoPlayer.style.display = "none";
+  });
+
   videoPlayer.addEventListener("timeupdate", () => {
     if (playheadDisplay) {
       playheadDisplay.textContent = formatTime(videoPlayer.currentTime);
@@ -408,29 +417,44 @@ function initializeVideoPreviewPlayer() {
 /* Video Preview Loader */
 function loadVideoPreview(absolutePath, displayName) {
   const sourcePickerContainer = document.getElementById("source-picker-container");
-  const loadedSourceBar = document.getElementById("loaded-source-bar");
-  const loadedSourceName = document.getElementById("loaded-source-name");
   const previewCard = document.getElementById("video-preview-card");
   const filenameText = document.getElementById("preview-filename-text");
   const videoPlayer = document.getElementById("inline-video-player");
+  const videoErrorFallback = document.getElementById("video-error-fallback");
+  const changeSourceBtn = document.getElementById("change-source-file-btn");
+  const sourceInput = document.getElementById("enhance-source-input");
 
   if (sourcePickerContainer) sourcePickerContainer.style.display = "none";
-  if (loadedSourceBar) loadedSourceBar.style.display = "flex";
-  if (loadedSourceName) {
-    loadedSourceName.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
+  if (sourceInput) sourceInput.value = absolutePath;
+
+  if (previewCard) {
+    previewCard.style.display = "flex";
   }
 
-  if (previewCard && videoPlayer) {
-    previewCard.style.display = "flex";
-    if (filenameText) {
-      filenameText.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
-    }
+  if (filenameText) {
+    filenameText.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
+  }
 
+  if (videoPlayer) {
+    if (videoErrorFallback) videoErrorFallback.style.display = "none";
+    videoPlayer.style.display = "block";
     const streamUrl = `/api/stream-video?path=${encodeURIComponent(absolutePath)}`;
     videoPlayer.src = streamUrl;
     videoPlayer.load();
   }
-  applyFluentIcons(loadedSourceBar);
+
+  if (changeSourceBtn && sourcePickerContainer && previewCard) {
+    changeSourceBtn.onclick = () => {
+      previewCard.style.display = "none";
+      sourcePickerContainer.style.display = "block";
+      if (videoPlayer) {
+        videoPlayer.pause();
+        videoPlayer.src = "";
+      }
+    };
+  }
+
+  applyFluentIcons(previewCard);
 }
 
 /* Download Submission and SSE Progress Listener */
@@ -577,18 +601,34 @@ function initializeEnhanceHandler() {
   const endTimeInput = document.getElementById("enhance-end-time");
   const bitrateInput = document.getElementById("enhance-bitrate-input");
   const submitBtn = document.getElementById("start-enhance-btn");
+  const submitBtnText = document.getElementById("enhance-btn-text");
   const spinner = document.getElementById("enhance-spinner");
   const btnIcon = document.getElementById("enhance-btn-icon");
 
   const statusCard = document.getElementById("enhance-status-card");
   const statusBadge = document.getElementById("enhance-status-badge");
+  const statusBadgeIcon = document.getElementById("enhance-status-badge-icon");
+  const statusBadgeText = document.getElementById("enhance-status-badge-text");
   const filenameDisplay = document.getElementById("enhance-filename-display");
+  const progressBar = document.getElementById("enhance-progress-bar");
+  const metricPercent = document.getElementById("enhance-metric-percent");
+  const metricSpeed = document.getElementById("enhance-metric-speed");
+  const metricEta = document.getElementById("enhance-metric-eta");
   const statusMsg = document.getElementById("enhance-status-msg");
   const outputPathBox = document.getElementById("enhance-output-path-box");
   const outputPathVal = document.getElementById("enhance-output-path");
   const previewOutputBtn = document.getElementById("preview-output-btn");
 
   if (!enhanceForm) return;
+
+  function updateEnhanceBadge(statusText, badgeClass = "status-badge", iconName = "wand_20_regular") {
+    if (statusBadge) statusBadge.className = badgeClass;
+    if (statusBadgeText) statusBadgeText.textContent = statusText;
+    if (statusBadgeIcon) {
+      statusBadgeIcon.setAttribute("data-fluent", iconName);
+      applyFluentIcons(statusBadge);
+    }
+  }
 
   enhanceForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -608,15 +648,19 @@ function initializeEnhanceHandler() {
     };
 
     submitBtn.disabled = true;
+    if (submitBtnText) submitBtnText.textContent = "Remastering Video...";
     spinner.classList.add("active");
     if (btnIcon) btnIcon.style.display = "none";
     statusCard.style.display = "flex";
     outputPathBox.style.display = "none";
 
-    statusBadge.className = "status-badge";
-    statusBadge.textContent = "Processing";
+    updateEnhanceBadge("Initializing", "status-badge", "wand_20_regular");
     filenameDisplay.textContent = sourcePath.split(/[\\/]/).pop() || "Video";
-    statusMsg.textContent = "Initializing FFmpeg filter pipeline...";
+    if (progressBar) progressBar.style.width = "0%";
+    if (metricPercent) metricPercent.textContent = "0%";
+    if (metricSpeed) metricSpeed.textContent = "Initializing...";
+    if (metricEta) metricEta.textContent = "Estimating...";
+    statusMsg.textContent = "Probing video integrity and initializing GPU encoder...";
 
     try {
       const response = await fetch("/api/enhance", {
@@ -633,10 +677,10 @@ function initializeEnhanceHandler() {
       const { job_id } = await response.json();
       attachEnhanceEventSource(job_id);
     } catch (err) {
-      statusBadge.className = "status-badge failed";
-      statusBadge.textContent = "Error";
+      updateEnhanceBadge("Error", "status-badge failed", "wand_20_regular");
       statusMsg.textContent = err.message;
       submitBtn.disabled = false;
+      if (submitBtnText) submitBtnText.textContent = "Process & Enhance Video";
       spinner.classList.remove("active");
       if (btnIcon) btnIcon.style.display = "inline-flex";
       showToast(err.message, "error");
@@ -651,13 +695,22 @@ function initializeEnhanceHandler() {
         const data = JSON.parse(event.data);
 
         if (data.status === "processing" || data.status === "starting") {
-          statusBadge.className = "status-badge";
-          statusBadge.textContent = "Processing";
-          if (data.message) statusMsg.textContent = data.message;
+          updateEnhanceBadge("Remastering", "status-badge", "wand_20_regular");
+
+          if (data.percent) {
+            if (metricPercent) metricPercent.textContent = data.percent;
+            const num = parseFloat(data.percent.replace("%", "")) || 0;
+            if (progressBar) progressBar.style.width = `${num}%`;
+          }
+          if (data.speed && metricSpeed) metricSpeed.textContent = data.speed;
+          if (data.eta && metricEta) metricEta.textContent = data.eta;
+          if (data.message && statusMsg) statusMsg.textContent = data.message;
         } else if (data.status === "completed") {
-          statusBadge.className = "status-badge completed";
-          statusBadge.textContent = "Done";
-          statusMsg.textContent = data.message || "Video processed successfully.";
+          updateEnhanceBadge("Done", "status-badge completed", "checkmark_20_regular");
+          if (progressBar) progressBar.style.width = "100%";
+          if (metricPercent) metricPercent.textContent = "100%";
+          if (metricEta) metricEta.textContent = "00:00";
+          if (statusMsg) statusMsg.textContent = data.message || "Video processed successfully.";
 
           if (data.output_path) {
             outputPathBox.style.display = "flex";
@@ -671,16 +724,17 @@ function initializeEnhanceHandler() {
           }
 
           submitBtn.disabled = false;
+          if (submitBtnText) submitBtnText.textContent = "Process & Enhance Video";
           spinner.classList.remove("active");
           if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
           loadRecentDownloads();
           showToast("Video processing completed successfully!", "success");
         } else if (data.status === "failed") {
-          statusBadge.className = "status-badge failed";
-          statusBadge.textContent = "Failed";
+          updateEnhanceBadge("Failed", "status-badge failed", "wand_20_regular");
           statusMsg.textContent = data.error || "FFmpeg processing encountered an error.";
           submitBtn.disabled = false;
+          if (submitBtnText) submitBtnText.textContent = "Process & Enhance Video";
           spinner.classList.remove("active");
           if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
@@ -694,6 +748,7 @@ function initializeEnhanceHandler() {
     eventSource.onerror = () => {
       eventSource.close();
       submitBtn.disabled = false;
+      if (submitBtnText) submitBtnText.textContent = "Process & Enhance Video";
       spinner.classList.remove("active");
       if (btnIcon) btnIcon.style.display = "inline-flex";
     };
@@ -858,9 +913,19 @@ function renderRecentDownloads() {
       sendToEnhancer(file.path, false);
     });
 
+    // Delete Action Button
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "recent-btn btn-delete";
+    deleteBtn.innerHTML = `${window.FLUENT_ICONS ? window.FLUENT_ICONS['delete_20_regular'] : ''}<span>Delete</span>`;
+    deleteBtn.title = "Delete file from downloads folder";
+    deleteBtn.addEventListener("click", async () => {
+      await deleteDownloadedFile(file.path, file.name);
+    });
+
     actionsRow.appendChild(explorerBtn);
     actionsRow.appendChild(previewBtn);
     actionsRow.appendChild(enhanceBtn);
+    actionsRow.appendChild(deleteBtn);
 
     item.appendChild(itemTop);
     item.appendChild(actionsRow);
@@ -868,6 +933,28 @@ function renderRecentDownloads() {
   });
 
   applyFluentIcons(container);
+}
+
+/* Call backend API to delete a file from the downloads folder */
+async function deleteDownloadedFile(filePath, fileName) {
+  try {
+    const res = await fetch("/api/delete-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: filePath }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(`Delete error: ${err.detail || "Failed to delete file"}`, "error");
+      return;
+    }
+
+    showToast(`Deleted ${fileName}`, "info");
+    loadRecentDownloads();
+  } catch (err) {
+    showToast(`Could not delete: ${err.message}`, "error");
+  }
 }
 
 /* Call backend API to reveal file in Windows Explorer */
