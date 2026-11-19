@@ -3,7 +3,7 @@ Implementation details:
 FastAPI backend service providing REST, file streaming, and Server-Sent Events (SSE) interfaces.
 Coordinates asynchronous background execution of YouTube video downloads and FFmpeg media enhancement.
 Streams real-time progress metrics to connected web clients using persistent HTTP event streams.
-Supports direct binary video file uploads, local media stream previews, and Windows Explorer file revelation.
+Supports direct binary video file uploads, local media stream previews, folder opening, and Windows Explorer file revelation.
 """
 
 import asyncio
@@ -28,6 +28,7 @@ from core.downloader import (
     resolve_download_directory,
     validate_target_url,
     download_youtube_video,
+    build_download_configuration,
 )
 from core.enhancer import (
     generate_output_path,
@@ -51,6 +52,7 @@ jobs_lock = threading.Lock()
 
 class DownloadRequest(BaseModel):
     url: str
+    quality: Optional[str] = "best"
 
 
 class EnhanceRequest(BaseModel):
@@ -74,7 +76,20 @@ def update_job_status(job_id: str, **kwargs) -> None:
             active_jobs[job_id].update(kwargs)
 
 
-def run_download_worker(job_id: str, target_url: str, output_directory: Path) -> None:
+def resolve_stream_format(quality_choice: str) -> tuple[str, str]:
+    """
+    Translates user-selected quality presets into yt-dlp format strings and container targets.
+    """
+    if quality_choice == "audio_only":
+        return "bestaudio/best", "m4a"
+    if quality_choice == "1080p":
+        return "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best", "mp4"
+    if quality_choice == "720p":
+        return "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best", "mp4"
+    return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "mp4"
+
+
+def run_download_worker(job_id: str, target_url: str, output_directory: Path, quality: str) -> None:
     """
     Executes yt-dlp download in a background thread and forwards progress to the job store.
     """
@@ -94,17 +109,17 @@ def run_download_worker(job_id: str, target_url: str, output_directory: Path) ->
             filename=Path(filename).name if filename else "",
         )
 
-    try:
-        success, message = download_youtube_video(
-            video_url=target_url,
-            destination_directory=output_directory,
-            progress_callback=progress_callback,
-        )
+    format_selector, merge_format = resolve_stream_format(quality)
+    config = build_download_configuration(output_directory, progress_callback)
+    config["format"] = format_selector
+    config["merge_output_format"] = merge_format
 
-        if success:
-            update_job_status(job_id, status="completed", percent="100%", message="Download completed successfully.")
-        else:
-            update_job_status(job_id, status="failed", error=message)
+    try:
+        import yt_dlp
+        with yt_dlp.YoutubeDL(config) as ydl_client:
+            ydl_client.download([target_url])
+
+        update_job_status(job_id, status="completed", percent="100%", message="Download completed successfully.")
     except Exception as unexpected_error:
         update_job_status(job_id, status="failed", error=str(unexpected_error))
 
@@ -185,7 +200,7 @@ async def start_download(request: DownloadRequest):
 
     worker_thread = threading.Thread(
         target=run_download_worker,
-        args=(job_id, clean_url, output_directory),
+        args=(job_id, clean_url, output_directory, request.quality or "best"),
         daemon=True,
     )
     worker_thread.start()
@@ -364,6 +379,22 @@ async def reveal_file_in_explorer(request: RevealRequest):
         raise HTTPException(status_code=500, detail=f"Failed to launch explorer: {execution_error}")
 
 
+@app.post("/api/open-downloads-folder")
+async def open_downloads_folder():
+    """
+    Directly opens the primary ytdownload destination directory inside Windows File Explorer.
+    """
+    target_folder = resolve_download_directory()
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer.exe", str(target_folder)])
+        else:
+            subprocess.Popen(["xdg-open", str(target_folder)])
+        return {"status": "success", "message": "Opened downloads folder."}
+    except Exception as execution_error:
+        raise HTTPException(status_code=500, detail=f"Failed to open downloads folder: {execution_error}")
+
+
 @app.get("/api/recent-downloads")
 async def get_recent_downloads():
     """
@@ -371,7 +402,7 @@ async def get_recent_downloads():
     including modification epoch timestamps and formatted date-time strings.
     """
     download_folder = resolve_download_directory()
-    valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov"}
+    valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4a", ".mp3"}
 
     files = []
     if download_folder.is_dir():

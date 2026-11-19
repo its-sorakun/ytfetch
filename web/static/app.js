@@ -8,6 +8,7 @@ Integrates Lucide icons for modern Windows 11 Fluent iconography.
 */
 
 let cachedRecentFiles = [];
+let currentQuality = "best";
 
 document.addEventListener("DOMContentLoaded", () => {
   initializeLucide();
@@ -15,6 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeTabs();
   initializeClickRipples();
   initializePasteButton();
+  initializeQualitySelector();
+  initializeFolderButtons();
   initializeModeSelector();
   initializeVideoUploader();
   initializeVideoPreviewPlayer();
@@ -151,98 +154,124 @@ function initializePasteButton() {
   const pasteBtn = document.getElementById("paste-url-btn");
   const urlInput = document.getElementById("youtube-url-input");
 
-  if (pasteBtn && urlInput) {
-    pasteBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      try {
-        const clipboardText = await navigator.clipboard.readText();
-        if (clipboardText) {
-          urlInput.value = clipboardText.trim();
-          urlInput.focus();
-        }
-      } catch {
+  if (!pasteBtn || !urlInput) return;
+
+  pasteBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        urlInput.value = text.trim();
         urlInput.focus();
       }
-    });
-  }
+    } catch {
+      urlInput.focus();
+    }
+  });
 }
 
-/* Mode Selection Toggle */
-function initializeModeSelector() {
-  const modeRadios = document.querySelectorAll("input[name='enhance-mode']");
-  const customGroup = document.getElementById("bitrate-custom-group");
+/* Stream Quality Preset Grid Controller */
+function initializeQualitySelector() {
+  const qualityCards = document.querySelectorAll(".quality-card");
 
-  modeRadios.forEach((radio) => {
-    radio.addEventListener("change", () => {
-      if (radio.value === "target_bitrate" && radio.checked) {
-        customGroup.style.display = "flex";
-      } else {
-        customGroup.style.display = "none";
-      }
+  qualityCards.forEach((card) => {
+    card.addEventListener("click", () => {
+      qualityCards.forEach((c) => c.classList.remove("active"));
+      card.classList.add("active");
+      currentQuality = card.getAttribute("data-quality") || "best";
     });
   });
 }
 
-/* File Upload & Drag-and-Drop Handler */
-function initializeVideoUploader() {
-  const dropzone = document.getElementById("upload-dropzone");
-  const fileInput = document.getElementById("video-file-input");
-  const overlay = document.getElementById("upload-progress-overlay");
-  const overlayText = document.getElementById("upload-progress-text");
-  const sourceInput = document.getElementById("enhance-source-input");
+/* Folder Navigation Direct Buttons */
+function initializeFolderButtons() {
+  const openFolderBtn = document.getElementById("open-folder-btn");
+  const stripOpenFolderBtn = document.getElementById("strip-open-folder-btn");
 
-  const togglePathBtn = document.getElementById("toggle-path-input-btn");
-  const pathContainer = document.getElementById("manual-path-container");
+  async function triggerOpenFolder() {
+    try {
+      await fetch("/api/open-downloads-folder", { method: "POST" });
+    } catch (err) {
+      console.error("Failed to open downloads folder:", err);
+    }
+  }
+
+  if (openFolderBtn) {
+    openFolderBtn.addEventListener("click", triggerOpenFolder);
+  }
+  if (stripOpenFolderBtn) {
+    stripOpenFolderBtn.addEventListener("click", triggerOpenFolder);
+  }
+}
+
+/* Enhancer Mode Toggle (CRF vs Explicit Bitrate) */
+function initializeModeSelector() {
+  const modeRadios = document.querySelectorAll("input[name='enhance-mode']");
+  const bitrateGroup = document.getElementById("bitrate-custom-group");
+
+  modeRadios.forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      if (bitrateGroup) {
+        bitrateGroup.style.display = e.target.value === "target_bitrate" ? "flex" : "none";
+      }
+    });
+  });
+
+  const accordionToggleBtn = document.getElementById("toggle-path-input-btn");
+  const manualPathContainer = document.getElementById("manual-path-container");
   const accordionArrow = document.getElementById("accordion-arrow");
 
-  if (togglePathBtn && pathContainer) {
-    togglePathBtn.addEventListener("click", () => {
-      const isHidden = pathContainer.style.display === "none";
-      pathContainer.style.display = isHidden ? "block" : "none";
+  if (accordionToggleBtn && manualPathContainer) {
+    accordionToggleBtn.addEventListener("click", () => {
+      const isHidden = manualPathContainer.style.display === "none";
+      manualPathContainer.style.display = isHidden ? "block" : "none";
       if (accordionArrow) {
         accordionArrow.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
       }
     });
   }
+}
+
+/* Video Upload and Drag-and-Drop Handler */
+function initializeVideoUploader() {
+  const dropzone = document.getElementById("upload-dropzone");
+  const fileInput = document.getElementById("video-file-input");
+  const progressOverlay = document.getElementById("upload-progress-overlay");
+  const progressText = document.getElementById("upload-progress-text");
+  const sourceInput = document.getElementById("enhance-source-input");
 
   if (!dropzone || !fileInput) return;
 
-  dropzone.addEventListener("click", (e) => {
-    if (e.target !== fileInput) {
-      fileInput.click();
-    }
-  });
+  dropzone.addEventListener("click", () => fileInput.click());
 
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
-    dropzone.classList.add("dragover");
+    dropzone.classList.add("drag-active");
   });
 
   dropzone.addEventListener("dragleave", () => {
-    dropzone.classList.remove("dragover");
+    dropzone.classList.remove("drag-active");
   });
 
-  dropzone.addEventListener("drop", async (e) => {
+  dropzone.addEventListener("drop", (e) => {
     e.preventDefault();
-    dropzone.classList.remove("dragover");
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      await uploadFileToServer(files[0]);
+    dropzone.classList.remove("drag-active");
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      uploadFile(e.dataTransfer.files[0]);
     }
   });
 
-  fileInput.addEventListener("change", async () => {
-    if (fileInput.files && fileInput.files.length > 0) {
-      await uploadFileToServer(fileInput.files[0]);
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files[0]) {
+      uploadFile(e.target.files[0]);
     }
   });
 
-  async function uploadFileToServer(file) {
-    if (!file) return;
+  async function uploadFile(file) {
+    if (!progressOverlay) return;
 
-    overlay.style.display = "flex";
-    overlayText.textContent = `Uploading ${file.name}...`;
+    progressOverlay.style.display = "flex";
+    if (progressText) progressText.textContent = `Uploading ${file.name}...`;
 
     const formData = new FormData();
     formData.append("file", file);
@@ -263,89 +292,69 @@ function initializeVideoUploader() {
         sourceInput.value = result.path;
       }
 
-      overlayText.textContent = "Upload successful!";
-      setTimeout(() => {
-        overlay.style.display = "none";
-      }, 700);
-
       loadVideoPreview(result.path, result.filename);
       loadRecentDownloads();
     } catch (err) {
       alert(`Upload error: ${err.message}`);
-      overlay.style.display = "none";
+    } finally {
+      progressOverlay.style.display = "none";
+      fileInput.value = "";
     }
   }
 }
 
-/* Helper: Format seconds to HH:MM:SS */
-function formatSecondsToTimecode(totalSeconds) {
-  const rounded = Math.floor(totalSeconds);
-  const hours = Math.floor(rounded / 3600);
-  const minutes = Math.floor((rounded % 3600) / 60);
-  const seconds = rounded % 60;
-
-  const paddedH = String(hours).padStart(2, "0");
-  const paddedM = String(minutes).padStart(2, "0");
-  const paddedS = String(seconds).padStart(2, "0");
-
-  return `${paddedH}:${paddedM}:${paddedS}`;
-}
-
-/* Integrated Video Playback Preview Player */
+/* Video Preview Player Controller */
 function initializeVideoPreviewPlayer() {
   const videoPlayer = document.getElementById("inline-video-player");
   const playheadDisplay = document.getElementById("current-playhead-time");
   const durationDisplay = document.getElementById("preview-duration-text");
   const setStartBtn = document.getElementById("set-start-ts-btn");
   const setEndBtn = document.getElementById("set-end-ts-btn");
-  const startInput = document.getElementById("enhance-start-time");
-  const endInput = document.getElementById("enhance-end-time");
+  const startTimeInput = document.getElementById("enhance-start-time");
+  const endTimeInput = document.getElementById("enhance-end-time");
 
   if (!videoPlayer) return;
 
+  function formatTime(seconds) {
+    const totalSec = Math.floor(seconds);
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+
   videoPlayer.addEventListener("timeupdate", () => {
     if (playheadDisplay) {
-      playheadDisplay.textContent = formatSecondsToTimecode(videoPlayer.currentTime);
+      playheadDisplay.textContent = formatTime(videoPlayer.currentTime);
     }
   });
 
   videoPlayer.addEventListener("loadedmetadata", () => {
     if (durationDisplay) {
-      durationDisplay.textContent = formatSecondsToTimecode(videoPlayer.duration);
+      durationDisplay.textContent = formatTime(videoPlayer.duration);
     }
   });
 
-  if (setStartBtn && startInput) {
+  if (setStartBtn && startTimeInput) {
     setStartBtn.addEventListener("click", () => {
-      startInput.value = formatSecondsToTimecode(videoPlayer.currentTime);
-      startInput.focus();
+      startTimeInput.value = formatTime(videoPlayer.currentTime);
+      startTimeInput.focus();
     });
   }
 
-  if (setEndBtn && endInput) {
+  if (setEndBtn && endTimeInput) {
     setEndBtn.addEventListener("click", () => {
-      endInput.value = formatSecondsToTimecode(videoPlayer.currentTime);
-      endInput.focus();
-    });
-  }
-
-  const manualSourceInput = document.getElementById("enhance-source-input");
-  if (manualSourceInput) {
-    manualSourceInput.addEventListener("change", () => {
-      const pathVal = manualSourceInput.value.trim();
-      if (pathVal) {
-        const displayName = pathVal.split(/[\\/]/).pop();
-        loadVideoPreview(pathVal, displayName);
-      }
+      endTimeInput.value = formatTime(videoPlayer.currentTime);
+      endTimeInput.focus();
     });
   }
 }
 
-/* Load media file into the preview player */
+/* Video Preview Loader */
 function loadVideoPreview(absolutePath, displayName) {
   const previewCard = document.getElementById("video-preview-card");
-  const videoPlayer = document.getElementById("inline-video-player");
   const filenameText = document.getElementById("preview-filename-text");
+  const videoPlayer = document.getElementById("inline-video-player");
 
   if (!previewCard || !videoPlayer) return;
 
@@ -399,7 +408,7 @@ function initializeDownloadHandler() {
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, quality: currentQuality }),
       });
 
       if (!response.ok) {
@@ -635,12 +644,12 @@ async function loadRecentDownloads() {
   } catch {
     const container = document.getElementById("recent-downloads-list");
     if (container) {
-      container.innerHTML = '<div class="empty-list-placeholder"><span>Failed to query download directory.</span></div>';
+      container.innerHTML = '<div class="empty-list-placeholder"><span class="empty-title">Failed to query download directory</span></div>';
     }
   }
 }
 
-/* Render Recent Downloads with Sorting */
+/* Render Recent Downloads with Windows 11 Fluent Item Cards & Rich Empty State */
 function renderRecentDownloads() {
   const container = document.getElementById("recent-downloads-list");
   const sortSelect = document.getElementById("recent-sort-select");
@@ -649,10 +658,29 @@ function renderRecentDownloads() {
   if (cachedRecentFiles.length === 0) {
     container.innerHTML = `
       <div class="empty-list-placeholder">
-        <i data-lucide="film" class="empty-placeholder-icon"></i>
-        <span>No media files located in Downloads/ytdownload</span>
+        <div class="empty-icon-circle">
+          <div class="empty-icon-inner">
+            <i data-lucide="film" class="empty-placeholder-icon"></i>
+          </div>
+        </div>
+        <span class="empty-title">No Media Found Yet</span>
+        <span class="empty-desc">Downloaded YouTube streams or enhanced video clips will appear here with metadata, playback preview, and Windows File Explorer controls.</span>
+        <button type="button" class="empty-action-btn" id="empty-open-folder-btn">
+          <i data-lucide="folder-open" class="icon-amber"></i>
+          <span>Open Downloads Directory</span>
+        </button>
       </div>
     `;
+    const emptyBtn = document.getElementById("empty-open-folder-btn");
+    if (emptyBtn) {
+      emptyBtn.addEventListener("click", async () => {
+        try {
+          await fetch("/api/open-downloads-folder", { method: "POST" });
+        } catch (err) {
+          console.error("Failed to open downloads folder:", err);
+        }
+      });
+    }
     initializeLucide();
     return;
   }
@@ -678,9 +706,27 @@ function renderRecentDownloads() {
     const itemTop = document.createElement("div");
     itemTop.className = "recent-item-top";
 
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    let chipClass = "chip-blue";
+    let iconName = "film";
+
+    if (ext === "mp4") {
+      chipClass = "chip-blue";
+      iconName = "film";
+    } else if (ext === "mkv") {
+      chipClass = "chip-purple";
+      iconName = "video";
+    } else if (ext === "webm") {
+      chipClass = "chip-emerald";
+      iconName = "monitor-play";
+    } else if (ext === "m4a" || ext === "mp3") {
+      chipClass = "chip-amber";
+      iconName = "music";
+    }
+
     const iconDiv = document.createElement("div");
-    iconDiv.className = "recent-file-icon";
-    iconDiv.innerHTML = '<i data-lucide="film"></i>';
+    iconDiv.className = `recent-file-icon ${chipClass}`;
+    iconDiv.innerHTML = `<i data-lucide="${iconName}"></i>`;
 
     const info = document.createElement("div");
     info.className = "recent-file-info";
@@ -701,7 +747,7 @@ function renderRecentDownloads() {
     separator.textContent = "•";
 
     const dateSpan = document.createElement("span");
-    dateSpan.textContent = file.modified_formatted || "Unknown date";
+    dateSpan.textContent = file.modified_formatted || "Recent";
 
     timeRow.appendChild(sizeBadge);
     timeRow.appendChild(separator);
@@ -719,8 +765,8 @@ function renderRecentDownloads() {
     // Reveal in Windows Explorer Action Button
     const explorerBtn = document.createElement("button");
     explorerBtn.className = "recent-btn btn-explorer";
-    explorerBtn.innerHTML = '<i data-lucide="folder-open"></i> Explorer';
-    explorerBtn.title = "Reveal in Windows Explorer";
+    explorerBtn.innerHTML = '<i data-lucide="folder-open" class="icon-amber"></i> Explorer';
+    explorerBtn.title = "Reveal in Windows File Explorer";
     explorerBtn.addEventListener("click", async () => {
       await revealFileInExplorer(file.path, explorerBtn);
     });
@@ -728,7 +774,7 @@ function renderRecentDownloads() {
     // Preview Action Button
     const previewBtn = document.createElement("button");
     previewBtn.className = "recent-btn btn-preview";
-    previewBtn.innerHTML = '<i data-lucide="play"></i> Preview';
+    previewBtn.innerHTML = '<i data-lucide="play" class="icon-emerald"></i> Preview';
     previewBtn.title = "Preview video in player";
     previewBtn.addEventListener("click", () => {
       sendToEnhancer(file.path, true);
@@ -737,7 +783,7 @@ function renderRecentDownloads() {
     // Enhance Action Button
     const enhanceBtn = document.createElement("button");
     enhanceBtn.className = "recent-btn btn-enhance";
-    enhanceBtn.innerHTML = '<i data-lucide="wand-2"></i> Enhance';
+    enhanceBtn.innerHTML = '<i data-lucide="wand-2" class="icon-purple"></i> Enhance';
     enhanceBtn.title = "Load into Enhancer tab";
     enhanceBtn.addEventListener("click", () => {
       sendToEnhancer(file.path, false);
@@ -759,7 +805,7 @@ function renderRecentDownloads() {
 async function revealFileInExplorer(filePath, buttonElement) {
   try {
     const originalText = buttonElement.innerHTML;
-    buttonElement.innerHTML = '<i data-lucide="check"></i> Opening...';
+    buttonElement.innerHTML = '<i data-lucide="check" class="icon-emerald"></i> Opening...';
     initializeLucide();
 
     const response = await fetch("/api/reveal-in-explorer", {
