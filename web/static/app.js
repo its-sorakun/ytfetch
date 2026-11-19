@@ -11,7 +11,7 @@ let cachedRecentFiles = [];
 let currentQuality = "best";
 
 document.addEventListener("DOMContentLoaded", () => {
-  renderFluentIcons();
+  applyFluentIcons();
   initializeTheme();
   initializeTabs();
   initializeClickRipples();
@@ -33,8 +33,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* Helper to render Fluent icons across DOM */
-function renderFluentIcons(root = document) {
-  if (window.renderFluentIcons) {
+function applyFluentIcons(root = document) {
+  if (typeof window.renderFluentIcons === "function") {
     window.renderFluentIcons(root);
   }
 }
@@ -55,7 +55,7 @@ function initializeTheme() {
 
       document.documentElement.setAttribute("data-theme", nextTheme);
       localStorage.setItem("ytfetch-theme", nextTheme);
-      renderFluentIcons();
+      applyFluentIcons();
     });
   }
 }
@@ -101,7 +101,7 @@ function initializeTabs() {
       }
 
       updateSliderPosition(button);
-      renderFluentIcons();
+      applyFluentIcons();
     });
   });
 
@@ -679,7 +679,7 @@ function renderRecentDownloads() {
         }
       });
     }
-    renderFluentIcons(container);
+    applyFluentIcons(container);
     return;
   }
 
@@ -782,7 +782,7 @@ function renderRecentDownloads() {
     container.appendChild(item);
   });
 
-  renderFluentIcons(container);
+  applyFluentIcons(container);
 }
 
 /* Call backend API to reveal file in Windows Explorer */
