@@ -4,14 +4,14 @@ Client-side presentation logic managing dual-theme states, animated tab navigati
 dynamic click ripples, video file uploads with drag-and-drop, inline video playback previews,
 timecode synchronization, Windows Explorer file revelation, sorting controls,
 and Server-Sent Events (SSE) telemetry listeners.
-Integrates Lucide icons for modern Windows 11 Fluent iconography.
+Integrates native Microsoft Fluent System Icons for authentic Windows 11 aesthetics.
 */
 
 let cachedRecentFiles = [];
 let currentQuality = "best";
 
 document.addEventListener("DOMContentLoaded", () => {
-  initializeLucide();
+  renderFluentIcons();
   initializeTheme();
   initializeTabs();
   initializeClickRipples();
@@ -32,10 +32,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-/* Lucide Icon Renderer */
-function initializeLucide() {
-  if (window.lucide) {
-    window.lucide.createIcons();
+/* Helper to render Fluent icons across DOM */
+function renderFluentIcons(root = document) {
+  if (window.renderFluentIcons) {
+    window.renderFluentIcons(root);
   }
 }
 
@@ -55,7 +55,7 @@ function initializeTheme() {
 
       document.documentElement.setAttribute("data-theme", nextTheme);
       localStorage.setItem("ytfetch-theme", nextTheme);
-      initializeLucide();
+      renderFluentIcons();
     });
   }
 }
@@ -70,7 +70,7 @@ function initializeTabs() {
     if (!activeButton || !tabSlider) return;
     const offsetLeft = activeButton.offsetLeft;
     const clientWidth = activeButton.clientWidth;
-    tabSlider.style.transform = `translateX(${offsetLeft - 4}px)`;
+    tabSlider.style.transform = `translateX(${offsetLeft - 3}px)`;
     tabSlider.style.width = `${clientWidth}px`;
   }
 
@@ -101,7 +101,7 @@ function initializeTabs() {
       }
 
       updateSliderPosition(button);
-      initializeLucide();
+      renderFluentIcons();
     });
   });
 
@@ -139,7 +139,7 @@ function initializeClickRipples() {
 
       setTimeout(() => {
         rippleElement.remove();
-      }, 650);
+      }, 600);
 
       const innerInput = wrapper.querySelector(".acrylic-input-core");
       if (innerInput && event.target !== innerInput) {
@@ -170,20 +170,20 @@ function initializePasteButton() {
   });
 }
 
-/* Stream Quality Preset Grid Controller */
+/* Stream Quality Preset Tiles Controller */
 function initializeQualitySelector() {
-  const qualityCards = document.querySelectorAll(".quality-card");
+  const qualityTiles = document.querySelectorAll(".quality-tile");
 
-  qualityCards.forEach((card) => {
-    card.addEventListener("click", () => {
-      qualityCards.forEach((c) => c.classList.remove("active"));
-      card.classList.add("active");
-      currentQuality = card.getAttribute("data-quality") || "best";
+  qualityTiles.forEach((tile) => {
+    tile.addEventListener("click", () => {
+      qualityTiles.forEach((t) => t.classList.remove("active"));
+      tile.classList.add("active");
+      currentQuality = tile.getAttribute("data-quality") || "best";
     });
   });
 }
 
-/* Folder Navigation Direct Buttons */
+/* Direct Folder Navigation Triggers */
 function initializeFolderButtons() {
   const openFolderBtn = document.getElementById("open-folder-btn");
   const stripOpenFolderBtn = document.getElementById("strip-open-folder-btn");
@@ -424,7 +424,7 @@ function initializeDownloadHandler() {
       statusMsg.textContent = err.message;
       submitBtn.disabled = false;
       spinner.classList.remove("active");
-      if (btnIcon) btnIcon.style.display = "inline-block";
+      if (btnIcon) btnIcon.style.display = "inline-flex";
     }
   });
 
@@ -461,7 +461,7 @@ function initializeDownloadHandler() {
           statusMsg.textContent = "Video successfully saved into Downloads/ytdownload!";
           submitBtn.disabled = false;
           spinner.classList.remove("active");
-          if (btnIcon) btnIcon.style.display = "inline-block";
+          if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
           loadRecentDownloads();
         } else if (data.status === "failed") {
@@ -470,7 +470,7 @@ function initializeDownloadHandler() {
           statusMsg.textContent = data.error || "An error occurred during extraction.";
           submitBtn.disabled = false;
           spinner.classList.remove("active");
-          if (btnIcon) btnIcon.style.display = "inline-block";
+          if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
         }
       } catch {
@@ -482,7 +482,7 @@ function initializeDownloadHandler() {
       eventSource.close();
       submitBtn.disabled = false;
       spinner.classList.remove("active");
-      if (btnIcon) btnIcon.style.display = "inline-block";
+      if (btnIcon) btnIcon.style.display = "inline-flex";
     };
   }
 }
@@ -556,7 +556,7 @@ function initializeEnhanceHandler() {
       statusMsg.textContent = err.message;
       submitBtn.disabled = false;
       spinner.classList.remove("active");
-      if (btnIcon) btnIcon.style.display = "inline-block";
+      if (btnIcon) btnIcon.style.display = "inline-flex";
     }
   });
 
@@ -589,7 +589,7 @@ function initializeEnhanceHandler() {
 
           submitBtn.disabled = false;
           spinner.classList.remove("active");
-          if (btnIcon) btnIcon.style.display = "inline-block";
+          if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
           loadRecentDownloads();
         } else if (data.status === "failed") {
@@ -598,7 +598,7 @@ function initializeEnhanceHandler() {
           statusMsg.textContent = data.error || "FFmpeg processing encountered an error.";
           submitBtn.disabled = false;
           spinner.classList.remove("active");
-          if (btnIcon) btnIcon.style.display = "inline-block";
+          if (btnIcon) btnIcon.style.display = "inline-flex";
           eventSource.close();
         }
       } catch {
@@ -610,7 +610,7 @@ function initializeEnhanceHandler() {
       eventSource.close();
       submitBtn.disabled = false;
       spinner.classList.remove("active");
-      if (btnIcon) btnIcon.style.display = "inline-block";
+      if (btnIcon) btnIcon.style.display = "inline-flex";
     };
   }
 }
@@ -649,7 +649,7 @@ async function loadRecentDownloads() {
   }
 }
 
-/* Render Recent Downloads with Windows 11 Fluent Item Cards & Rich Empty State */
+/* Render Recent Downloads with Windows 11 Fluent Item Cards & Minimal Empty State */
 function renderRecentDownloads() {
   const container = document.getElementById("recent-downloads-list");
   const sortSelect = document.getElementById("recent-sort-select");
@@ -659,15 +659,13 @@ function renderRecentDownloads() {
     container.innerHTML = `
       <div class="empty-list-placeholder">
         <div class="empty-icon-circle">
-          <div class="empty-icon-inner">
-            <i data-lucide="film" class="empty-placeholder-icon"></i>
-          </div>
+          <span class="empty-placeholder-icon" data-fluent="video_clip_24_regular"></span>
         </div>
-        <span class="empty-title">No Media Found Yet</span>
-        <span class="empty-desc">Downloaded YouTube streams or enhanced video clips will appear here with metadata, playback preview, and Windows File Explorer controls.</span>
+        <span class="empty-title">Your library is empty</span>
+        <span class="empty-desc">Videos downloaded from YouTube or enhanced clips will appear here.</span>
         <button type="button" class="empty-action-btn" id="empty-open-folder-btn">
-          <i data-lucide="folder-open" class="icon-amber"></i>
-          <span>Open Downloads Directory</span>
+          <span class="empty-btn-icon" data-fluent="folder_open_20_regular"></span>
+          <span>Open Downloads folder</span>
         </button>
       </div>
     `;
@@ -681,7 +679,7 @@ function renderRecentDownloads() {
         }
       });
     }
-    initializeLucide();
+    renderFluentIcons(container);
     return;
   }
 
@@ -707,26 +705,12 @@ function renderRecentDownloads() {
     itemTop.className = "recent-item-top";
 
     const ext = (file.name.split(".").pop() || "").toLowerCase();
-    let chipClass = "chip-blue";
-    let iconName = "film";
-
-    if (ext === "mp4") {
-      chipClass = "chip-blue";
-      iconName = "film";
-    } else if (ext === "mkv") {
-      chipClass = "chip-purple";
-      iconName = "video";
-    } else if (ext === "webm") {
-      chipClass = "chip-emerald";
-      iconName = "monitor-play";
-    } else if (ext === "m4a" || ext === "mp3") {
-      chipClass = "chip-amber";
-      iconName = "music";
-    }
+    const isAudio = ext === "m4a" || ext === "mp3";
+    const iconName = isAudio ? "music_note_2_20_regular" : "video_clip_20_regular";
 
     const iconDiv = document.createElement("div");
-    iconDiv.className = `recent-file-icon ${chipClass}`;
-    iconDiv.innerHTML = `<i data-lucide="${iconName}"></i>`;
+    iconDiv.className = "recent-file-icon";
+    iconDiv.setAttribute("data-fluent", iconName);
 
     const info = document.createElement("div");
     info.className = "recent-file-info";
@@ -765,7 +749,7 @@ function renderRecentDownloads() {
     // Reveal in Windows Explorer Action Button
     const explorerBtn = document.createElement("button");
     explorerBtn.className = "recent-btn btn-explorer";
-    explorerBtn.innerHTML = '<i data-lucide="folder-open" class="icon-amber"></i> Explorer';
+    explorerBtn.innerHTML = `${window.FLUENT_ICONS ? window.FLUENT_ICONS['folder_open_20_regular'] : ''}<span>Explorer</span>`;
     explorerBtn.title = "Reveal in Windows File Explorer";
     explorerBtn.addEventListener("click", async () => {
       await revealFileInExplorer(file.path, explorerBtn);
@@ -774,7 +758,7 @@ function renderRecentDownloads() {
     // Preview Action Button
     const previewBtn = document.createElement("button");
     previewBtn.className = "recent-btn btn-preview";
-    previewBtn.innerHTML = '<i data-lucide="play" class="icon-emerald"></i> Preview';
+    previewBtn.innerHTML = `${window.FLUENT_ICONS ? window.FLUENT_ICONS['play_20_regular'] : ''}<span>Preview</span>`;
     previewBtn.title = "Preview video in player";
     previewBtn.addEventListener("click", () => {
       sendToEnhancer(file.path, true);
@@ -783,7 +767,7 @@ function renderRecentDownloads() {
     // Enhance Action Button
     const enhanceBtn = document.createElement("button");
     enhanceBtn.className = "recent-btn btn-enhance";
-    enhanceBtn.innerHTML = '<i data-lucide="wand-2" class="icon-purple"></i> Enhance';
+    enhanceBtn.innerHTML = `${window.FLUENT_ICONS ? window.FLUENT_ICONS['wand_20_regular'] : ''}<span>Enhance</span>`;
     enhanceBtn.title = "Load into Enhancer tab";
     enhanceBtn.addEventListener("click", () => {
       sendToEnhancer(file.path, false);
@@ -798,15 +782,14 @@ function renderRecentDownloads() {
     container.appendChild(item);
   });
 
-  initializeLucide();
+  renderFluentIcons(container);
 }
 
 /* Call backend API to reveal file in Windows Explorer */
 async function revealFileInExplorer(filePath, buttonElement) {
   try {
-    const originalText = buttonElement.innerHTML;
-    buttonElement.innerHTML = '<i data-lucide="check" class="icon-emerald"></i> Opening...';
-    initializeLucide();
+    const originalContent = buttonElement.innerHTML;
+    buttonElement.innerHTML = `${window.FLUENT_ICONS ? window.FLUENT_ICONS['checkmark_20_regular'] : ''}<span>Opening...</span>`;
 
     const response = await fetch("/api/reveal-in-explorer", {
       method: "POST",
@@ -815,8 +798,7 @@ async function revealFileInExplorer(filePath, buttonElement) {
     });
 
     setTimeout(() => {
-      buttonElement.innerHTML = originalText;
-      initializeLucide();
+      buttonElement.innerHTML = originalContent;
     }, 1200);
 
     if (!response.ok) {

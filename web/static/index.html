@@ -2,10 +2,9 @@
 <!--
 Implementation details:
 Single Page Application (SPA) layout for YtFetch.
-Implements Windows 11 Fluent 2 design language with Mica background blooms and Acrylic glass surfaces.
-Features an expansive horizontal dual-card architecture: media operational workbench on the left
-and an interactive recent media manager with sorting and Windows Explorer revelation on the right.
-Integrates vibrant Lucide icon chips with colorful badges and full viewport vertical space utilization.
+Implements Windows 11 Fluent 2 design language with minimal, atmospheric Unsplash-level aesthetics.
+Features an expansive horizontal dual-card architecture with native Microsoft Fluent System Icons,
+clean typography, and distraction-free media management.
 -->
 <html lang="en" data-theme="dark">
 <head>
@@ -16,33 +15,29 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/static/fluent-icons.js"></script>
 </head>
 <body>
-  <!-- Windows 11 Mica dynamic background blooms -->
+  <!-- Windows 11 Mica atmospheric ambient blooms -->
   <div class="mica-bloom bloom-primary"></div>
   <div class="mica-bloom bloom-secondary"></div>
-  <div class="mica-bloom bloom-tertiary"></div>
   <div class="acrylic-noise-overlay"></div>
 
   <div class="app-container">
-    <!-- Header: Brand Title Left, Centered Tabs, Theme Toggle Right -->
+    <!-- Header: Minimal Title Left, Centered Segmented Tabs, Theme Toggle Right -->
     <header class="win11-header">
       <div class="header-left">
-        <div class="brand-badge">
-          <i data-lucide="play" class="brand-badge-icon"></i>
-        </div>
-        <span class="brand-title">Yt<span class="brand-accent">Fetch</span></span>
+        <span class="brand-title">YtFetch</span>
       </div>
 
       <div class="header-center">
         <nav class="win11-tab-bar" role="tablist">
           <button class="win11-tab-btn active" id="tab-btn-downloader" data-target="tab-downloader" role="tab" aria-selected="true">
-            <span class="icon-chip chip-blue"><i data-lucide="download"></i></span>
+            <span class="tab-icon" data-fluent="arrow_download_20_regular"></span>
             <span>Downloader</span>
           </button>
           <button class="win11-tab-btn" id="tab-btn-enhancer" data-target="tab-enhancer" role="tab" aria-selected="false">
-            <span class="icon-chip chip-purple"><i data-lucide="sparkles"></i></span>
+            <span class="tab-icon" data-fluent="wand_20_regular"></span>
             <span>Enhancer</span>
           </button>
           <div class="tab-slider-pill" id="tab-slider"></div>
@@ -51,8 +46,8 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
 
       <div class="header-right">
         <button class="win11-icon-btn theme-btn" id="theme-toggle" title="Toggle Theme" aria-label="Toggle theme">
-          <span class="theme-icon-wrap sun-wrap"><i data-lucide="sun"></i></span>
-          <span class="theme-icon-wrap moon-wrap"><i data-lucide="moon"></i></span>
+          <span class="theme-icon-wrap sun-wrap" data-fluent="weather_sunny_20_regular"></span>
+          <span class="theme-icon-wrap moon-wrap" data-fluent="weather_moon_20_regular"></span>
         </button>
       </div>
     </header>
@@ -64,10 +59,6 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
         <!-- TAB 1: Downloader -->
         <div class="tab-panel active" id="tab-downloader" role="tabpanel">
           <div class="panel-hero">
-            <div class="hero-chip chip-blue">
-              <i data-lucide="zap" class="hero-chip-svg"></i>
-              <span>Media Extraction</span>
-            </div>
             <h2 class="panel-title">Download YouTube Stream</h2>
             <p class="panel-subtitle">Acquire high-definition video and separate audio streams, remuxing via FFmpeg into universal MP4</p>
           </div>
@@ -88,58 +79,45 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
               />
               <label class="floating-acrylic-label" for="youtube-url-input">Paste YouTube video URL here...</label>
               <button type="button" class="paste-button" id="paste-url-btn" title="Paste from clipboard">
-                <i data-lucide="clipboard-paste" class="icon-indigo"></i>
+                <span data-fluent="clipboard_paste_20_regular"></span>
               </button>
             </div>
 
-            <!-- Quality & Stream Format Grid Cards -->
+            <!-- Quality & Stream Format Grid Cards (Minimal, No Dots) -->
             <div class="form-field-group">
               <div class="field-label-row">
-                <label class="field-label">Stream Quality Preset</label>
-                <span class="field-sublabel">Select target resolution or audio extraction</span>
+                <label class="field-label">Stream Quality</label>
               </div>
               <div class="quality-grid" id="quality-selector">
-                <button type="button" class="quality-card active" data-quality="best">
-                  <div class="quality-card-top">
-                    <span class="icon-chip chip-blue"><i data-lucide="sparkles"></i></span>
-                    <span class="pill-dot dot-blue"></span>
-                  </div>
-                  <div class="quality-card-body">
-                    <span class="quality-card-title">Best Available</span>
-                    <span class="quality-card-desc">4K UHD / 1440p / 1080p Max</span>
+                <button type="button" class="quality-tile active" data-quality="best">
+                  <div class="quality-tile-icon" data-fluent="sparkle_20_regular"></div>
+                  <div class="quality-tile-info">
+                    <span class="quality-tile-title">Best Available</span>
+                    <span class="quality-tile-desc">4K UHD / 1080p Maximum</span>
                   </div>
                 </button>
 
-                <button type="button" class="quality-card" data-quality="1080p">
-                  <div class="quality-card-top">
-                    <span class="icon-chip chip-cyan"><i data-lucide="monitor"></i></span>
-                    <span class="pill-dot dot-cyan"></span>
-                  </div>
-                  <div class="quality-card-body">
-                    <span class="quality-card-title">1080p Full HD</span>
-                    <span class="quality-card-desc">Standard 60FPS high-definition master</span>
+                <button type="button" class="quality-tile" data-quality="1080p">
+                  <div class="quality-tile-icon" data-fluent="desktop_20_regular"></div>
+                  <div class="quality-tile-info">
+                    <span class="quality-tile-title">1080p Full HD</span>
+                    <span class="quality-tile-desc">Standard 60FPS master</span>
                   </div>
                 </button>
 
-                <button type="button" class="quality-card" data-quality="720p">
-                  <div class="quality-card-top">
-                    <span class="icon-chip chip-emerald"><i data-lucide="zap"></i></span>
-                    <span class="pill-dot dot-emerald"></span>
-                  </div>
-                  <div class="quality-card-body">
-                    <span class="quality-card-title">720p Fast HD</span>
-                    <span class="quality-card-desc">Rapid download, optimized storage</span>
+                <button type="button" class="quality-tile" data-quality="720p">
+                  <div class="quality-tile-icon" data-fluent="flash_20_regular"></div>
+                  <div class="quality-tile-info">
+                    <span class="quality-tile-title">720p Fast HD</span>
+                    <span class="quality-tile-desc">Rapid download, balanced size</span>
                   </div>
                 </button>
 
-                <button type="button" class="quality-card" data-quality="audio_only">
-                  <div class="quality-card-top">
-                    <span class="icon-chip chip-amber"><i data-lucide="music"></i></span>
-                    <span class="pill-dot dot-amber"></span>
-                  </div>
-                  <div class="quality-card-body">
-                    <span class="quality-card-title">Audio Only (M4A)</span>
-                    <span class="quality-card-desc">Pure high-bitrate AAC audio track</span>
+                <button type="button" class="quality-tile" data-quality="audio_only">
+                  <div class="quality-tile-icon" data-fluent="music_note_2_20_regular"></div>
+                  <div class="quality-tile-info">
+                    <span class="quality-tile-title">Audio Only</span>
+                    <span class="quality-tile-desc">Pure AAC / M4A audio track</span>
                   </div>
                 </button>
               </div>
@@ -148,23 +126,20 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
             <!-- System Info Strip -->
             <div class="system-info-strip">
               <div class="info-item">
-                <span class="icon-chip chip-amber-mini"><i data-lucide="folder"></i></span>
+                <span class="info-icon" data-fluent="folder_20_regular"></span>
                 <span class="info-text">Output: <code>Downloads/ytdownload</code></span>
-                <button type="button" class="info-action-link" id="strip-open-folder-btn" title="Open in File Explorer">
-                  <i data-lucide="folder-open" class="icon-amber"></i>
-                  <span>Open</span>
-                </button>
+                <button type="button" class="info-action-link" id="strip-open-folder-btn" title="Open in Windows Explorer">Open folder</button>
               </div>
               <div class="info-item">
-                <span class="icon-chip chip-cyan-mini"><i data-lucide="cpu"></i></span>
-                <span class="info-text">Remux Engine: <code>yt-dlp + FFmpeg</code></span>
+                <span class="info-icon" data-fluent="developer_board_20_regular"></span>
+                <span class="info-text">Engine: <code>yt-dlp + FFmpeg</code></span>
               </div>
             </div>
 
             <div class="form-submit-row">
               <button type="submit" class="win11-primary-btn" id="start-download-btn">
                 <span class="btn-spinner" id="download-spinner"></span>
-                <i data-lucide="arrow-down-to-line" class="btn-icon-svg" id="download-btn-icon"></i>
+                <span class="btn-icon-wrap" id="download-btn-icon" data-fluent="arrow_download_20_filled"></span>
                 <span class="btn-text">Start Download</span>
               </button>
             </div>
@@ -202,12 +177,8 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
         <!-- TAB 2: Enhancer -->
         <div class="tab-panel" id="tab-enhancer" role="tabpanel">
           <div class="panel-hero">
-            <div class="hero-chip chip-purple">
-              <i data-lucide="wand-2" class="hero-chip-svg"></i>
-              <span>Media Mastering</span>
-            </div>
             <h2 class="panel-title">Video Clipper & Enhancer</h2>
-            <p class="panel-subtitle">Upload or select a file, preview frames, clip exact intervals, and remaster with unsharp filters</p>
+            <p class="panel-subtitle">Upload or select a local video, preview frames, clip exact intervals, and remaster bitrates.</p>
           </div>
 
           <form class="action-form" id="enhance-form">
@@ -218,12 +189,10 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
               <div class="upload-dropzone" id="upload-dropzone">
                 <input type="file" id="video-file-input" accept="video/mp4,video/mkv,video/webm,video/avi,video/quicktime" class="hidden-file-input">
                 <div class="dropzone-content">
-                  <div class="dropzone-icon-circle">
-                    <i data-lucide="upload-cloud" class="icon-cyan"></i>
-                  </div>
+                  <div class="dropzone-icon" data-fluent="arrow_upload_24_regular"></div>
                   <div class="dropzone-text-group">
-                    <span class="dropzone-primary-text">Drag & drop video here, or <span class="accent-link">Browse files</span></span>
-                    <span class="dropzone-secondary-text">Supports MP4, MKV, WebM, MOV, AVI</span>
+                    <span class="dropzone-primary-text">Drag and drop video here, or <span class="accent-link">Browse files</span></span>
+                    <span class="dropzone-secondary-text">MP4, MKV, WebM, MOV, AVI</span>
                   </div>
                 </div>
                 <div class="upload-progress-overlay" id="upload-progress-overlay" style="display: none;">
@@ -235,9 +204,9 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
               <!-- Manual Path Input Accordion -->
               <div class="manual-path-accordion">
                 <button type="button" class="accordion-toggle-btn" id="toggle-path-input-btn">
-                  <span class="icon-chip chip-cyan-mini"><i data-lucide="folder-search"></i></span>
+                  <span data-fluent="folder_20_regular" class="accordion-btn-icon"></span>
                   <span>Enter absolute file path manually</span>
-                  <i data-lucide="chevron-down" class="accordion-arrow" id="accordion-arrow"></i>
+                  <span data-fluent="chevron_down_20_regular" class="accordion-arrow" id="accordion-arrow"></span>
                 </button>
 
                 <div class="accordion-content" id="manual-path-container" style="display: none;">
@@ -262,7 +231,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
             <div class="preview-card" id="video-preview-card" style="display: none;">
               <div class="preview-header">
                 <div class="preview-title-group">
-                  <span class="preview-badge"><i data-lucide="play" class="preview-badge-icon"></i> Preview</span>
+                  <span class="preview-badge"><span data-fluent="play_20_filled" class="preview-badge-icon"></span> Preview</span>
                   <span class="preview-filename" id="preview-filename-text">video.mp4</span>
                 </div>
                 <span class="preview-duration" id="preview-duration-text">00:00:00</span>
@@ -278,14 +247,8 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
                   <span class="ts-value" id="current-playhead-time">00:00:00</span>
                 </div>
                 <div class="timestamp-btn-group">
-                  <button type="button" class="ts-set-btn" id="set-start-ts-btn">
-                    <i data-lucide="corner-down-right" class="ts-icon icon-blue"></i>
-                    <span>Set as Start</span>
-                  </button>
-                  <button type="button" class="ts-set-btn" id="set-end-ts-btn">
-                    <i data-lucide="corner-down-left" class="ts-icon icon-purple"></i>
-                    <span>Set as End</span>
-                  </button>
+                  <button type="button" class="ts-set-btn" id="set-start-ts-btn">Set as Start</button>
+                  <button type="button" class="ts-set-btn" id="set-end-ts-btn">Set as End</button>
                 </div>
               </div>
             </div>
@@ -293,7 +256,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
             <!-- Time Range Input Grid -->
             <div class="time-range-grid">
               <div class="form-field-group">
-                <label class="field-label">Start Time (HH:MM:SS or seconds)</label>
+                <label class="field-label">Start Time (HH:MM:SS)</label>
                 <div class="acrylic-input-wrapper compact-wrapper" id="start-time-wrapper">
                   <div class="ripple-host"></div>
                   <div class="conic-glow-border"></div>
@@ -308,7 +271,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
               </div>
 
               <div class="form-field-group">
-                <label class="field-label">End Time (HH:MM:SS or seconds)</label>
+                <label class="field-label">End Time (HH:MM:SS)</label>
                 <div class="acrylic-input-wrapper compact-wrapper" id="end-time-wrapper">
                   <div class="ripple-host"></div>
                   <div class="conic-glow-border"></div>
@@ -332,7 +295,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
                   <div class="profile-box">
                     <div class="profile-box-header">
                       <div class="profile-title-row">
-                        <span class="icon-chip chip-purple-mini"><i data-lucide="wand-2"></i></span>
+                        <span data-fluent="wand_20_regular" class="profile-icon"></span>
                         <span class="profile-title">High-Fidelity Perceptual</span>
                       </div>
                       <span class="badge-mini">Recommended</span>
@@ -346,7 +309,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
                   <div class="profile-box">
                     <div class="profile-box-header">
                       <div class="profile-title-row">
-                        <span class="icon-chip chip-amber-mini"><i data-lucide="gauge"></i></span>
+                        <span data-fluent="gauge_20_regular" class="profile-icon"></span>
                         <span class="profile-title">Explicit Target Bitrate</span>
                       </div>
                     </div>
@@ -375,7 +338,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
             <div class="form-submit-row">
               <button type="submit" class="win11-primary-btn btn-enhance-submit" id="start-enhance-btn">
                 <span class="btn-spinner" id="enhance-spinner"></span>
-                <i data-lucide="wand-2" class="btn-icon-svg" id="enhance-btn-icon"></i>
+                <span class="btn-icon-wrap" id="enhance-btn-icon" data-fluent="wand_20_filled"></span>
                 <span class="btn-text">Process & Enhance Video</span>
               </button>
             </div>
@@ -392,7 +355,7 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
               <span class="output-label">Enhanced Output:</span>
               <span class="output-value" id="enhance-output-path"></span>
               <button type="button" class="preview-output-btn" id="preview-output-btn">
-                <i data-lucide="play" class="btn-icon-svg icon-cyan"></i>
+                <span data-fluent="play_20_regular" class="btn-icon-svg"></span>
                 <span>Preview Enhanced Result in Player</span>
               </button>
             </div>
@@ -404,19 +367,18 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
       <section class="win11-card recent-card">
         <div class="recent-card-header">
           <div class="recent-title-wrap">
-            <span class="icon-chip chip-rose"><i data-lucide="film"></i></span>
             <h2 class="recent-title">Recent Media</h2>
             <span class="badge-count" id="recent-count">0</span>
           </div>
 
           <div class="recent-toolbar">
-            <button class="win11-toolbar-btn btn-toolbar-amber" id="open-folder-btn" title="Open Downloads Folder in Windows Explorer">
-              <i data-lucide="folder-open" class="icon-amber"></i>
+            <button class="win11-toolbar-btn" id="open-folder-btn" title="Open Downloads Folder in Windows Explorer">
+              <span class="toolbar-btn-icon" data-fluent="folder_open_20_regular"></span>
               <span>Folder</span>
             </button>
 
             <div class="sort-select-wrapper">
-              <i data-lucide="arrow-down-up" class="sort-icon icon-blue"></i>
+              <span class="sort-icon" data-fluent="arrow_sort_20_regular"></span>
               <select class="win11-select" id="recent-sort-select" title="Sort files">
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
@@ -426,28 +388,21 @@ Integrates vibrant Lucide icon chips with colorful badges and full viewport vert
             </div>
 
             <button class="win11-icon-btn refresh-btn" id="refresh-recent-btn" title="Refresh files" aria-label="Refresh">
-              <i data-lucide="rotate-cw" class="icon-emerald"></i>
+              <span data-fluent="arrow_clockwise_20_regular"></span>
             </button>
           </div>
-        </div>
-
-        <div class="recent-dir-banner">
-          <i data-lucide="hard-drive" class="banner-icon icon-cyan"></i>
-          <span class="banner-text">Target: <code>Downloads/ytdownload</code></span>
         </div>
 
         <div class="recent-list-container" id="recent-downloads-list">
           <div class="empty-list-placeholder">
             <div class="empty-icon-circle">
-              <div class="empty-icon-inner">
-                <i data-lucide="film" class="empty-placeholder-icon"></i>
-              </div>
+              <span class="empty-placeholder-icon" data-fluent="video_clip_24_regular"></span>
             </div>
-            <span class="empty-title">No Media Found Yet</span>
-            <span class="empty-desc">Downloaded YouTube streams or enhanced video clips will appear here with metadata, playback preview, and Windows File Explorer controls.</span>
+            <span class="empty-title">Your library is empty</span>
+            <span class="empty-desc">Videos downloaded from YouTube or enhanced clips will appear here.</span>
             <button type="button" class="empty-action-btn" id="empty-open-folder-btn">
-              <i data-lucide="folder-open" class="icon-amber"></i>
-              <span>Open Downloads Directory</span>
+              <span class="empty-btn-icon" data-fluent="folder_open_20_regular"></span>
+              <span>Open Downloads folder</span>
             </button>
           </div>
         </div>
