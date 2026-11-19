@@ -37,6 +37,8 @@ from core.enhancer import (
     construct_ffmpeg_command,
     execute_ffmpeg_process,
     detect_hardware_encoder,
+    probe_media_file,
+    parse_time_to_seconds,
 )
 
 ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
@@ -76,6 +78,10 @@ class EnhanceRequest(BaseModel):
 
 
 class RevealRequest(BaseModel):
+    path: str
+
+
+class DeleteRequest(BaseModel):
     path: str
 
 
@@ -138,12 +144,24 @@ def run_download_worker(job_id: str, target_url: str, output_directory: Path, qu
 
 def run_enhance_worker(job_id: str, request_data: EnhanceRequest) -> None:
     """
-    Executes FFmpeg clip extraction and re-encoding in a background thread.
+    Executes FFmpeg clip extraction and re-encoding in a background thread with real-time telemetry.
+    Validates input video container and moov atom integrity with ffprobe before launching FFmpeg.
     """
     source_file = Path(request_data.source_path.strip("\"'")).resolve()
     if not source_file.is_file():
-        update_job_status(job_id, status="failed", error="Source video file does not exist.")
+        update_job_status(job_id, status="failed", error="Source video file does not exist on disk.")
         return
+
+    # Pre-flight container and codec validation via ffprobe
+    is_valid, duration_sec, probe_msg = probe_media_file(source_file)
+    if not is_valid:
+        update_job_status(job_id, status="failed", error=probe_msg)
+        return
+
+    # Calculate expected target duration based on clip start/end timestamps
+    start_sec = parse_time_to_seconds(request_data.start_time) or 0.0
+    end_sec = parse_time_to_seconds(request_data.end_time) or duration_sec
+    expected_duration = max(1.0, end_sec - start_sec) if (request_data.start_time or request_data.end_time) else duration_sec
 
     is_clipped = bool(request_data.start_time or request_data.end_time)
     output_file = generate_output_path(source_file, is_clipped)
@@ -165,19 +183,31 @@ def run_enhance_worker(job_id: str, request_data: EnhanceRequest) -> None:
         settings=settings,
     )
 
-    update_job_status(
-        job_id,
-        status="processing",
-        message="Executing FFmpeg remuxing and enhancement filters...",
-        output_path=str(output_file),
-    )
+    def on_progress(telemetry: dict) -> None:
+        update_job_status(
+            job_id,
+            status=telemetry.get("status", "processing"),
+            percent=telemetry.get("percent", "0%"),
+            speed=telemetry.get("speed", "--"),
+            eta=telemetry.get("eta", "--"),
+            message=telemetry.get("message", "Processing video frames..."),
+            output_path=str(output_file),
+        )
 
-    success, message = execute_ffmpeg_process(command)
+    success, message = execute_ffmpeg_process(
+        ffmpeg_command=command,
+        output_file=output_file,
+        expected_duration=expected_duration,
+        progress_callback=on_progress,
+    )
 
     if success:
         update_job_status(
             job_id,
             status="completed",
+            percent="100%",
+            speed="Done",
+            eta="00:00",
             message=f"Enhancement complete. File saved to {output_file.name}",
             output_path=str(output_file),
         )
@@ -265,7 +295,10 @@ async def start_enhancement(request: EnhanceRequest):
             "id": job_id,
             "type": "enhance",
             "status": "starting",
-            "message": "Initializing FFmpeg process...",
+            "percent": "0%",
+            "speed": "Initializing...",
+            "eta": "Calculating...",
+            "message": "Initializing FFmpeg filter pipeline...",
             "output_path": "",
             "error": "",
         }
@@ -418,6 +451,28 @@ async def reveal_file_in_explorer(request: RevealRequest):
         return {"status": "success", "message": f"Revealed {target_path.name} in Explorer."}
     except Exception as execution_error:
         raise HTTPException(status_code=500, detail=f"Failed to launch explorer: {execution_error}")
+
+
+@app.post("/api/delete-file")
+async def delete_downloaded_file(request: DeleteRequest):
+    """
+    Safely deletes a media file located inside the downloads folder.
+    """
+    cleaned_path = unquote(request.path.strip("\"'"))
+    target = Path(cleaned_path).resolve()
+    download_dir = resolve_download_directory().resolve()
+
+    if not str(target).startswith(str(download_dir)):
+        raise HTTPException(status_code=403, detail="Files outside the downloads folder cannot be deleted.")
+
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File does not exist.")
+
+    try:
+        target.unlink()
+        return {"status": "success", "message": f"Deleted {target.name}"}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {exc}")
 
 
 @app.get("/api/system-status")
