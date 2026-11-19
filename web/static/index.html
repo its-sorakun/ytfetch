@@ -126,6 +126,53 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
               </div>
             </div>
 
+            <!-- Optional Timestamp Clipping Accordion -->
+            <div class="manual-path-accordion download-clip-accordion">
+              <button type="button" class="accordion-toggle-btn" id="toggle-dl-clip-btn">
+                <span data-fluent="wand_20_regular" class="accordion-btn-icon"></span>
+                <span>Download specific timestamp range (Optional)</span>
+                <span data-fluent="chevron_down_20_regular" class="accordion-arrow" id="dl-clip-arrow"></span>
+              </button>
+
+              <div class="accordion-content" id="dl-clip-container" style="display: none;">
+                <div class="time-range-grid">
+                  <div class="form-field-group">
+                    <label class="field-label" for="download-start-time">Start Time (HH:MM:SS)</label>
+                    <div class="acrylic-input-wrapper compact-wrapper">
+                      <div class="ripple-host"></div>
+                      <div class="conic-glow-border"></div>
+                      <input 
+                        type="text" 
+                        class="acrylic-input-core" 
+                        id="download-start-time" 
+                        placeholder=" "
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <label class="floating-acrylic-label" for="download-start-time">00:00:00 (blank = start)</label>
+                    </div>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label class="field-label" for="download-end-time">End Time (HH:MM:SS)</label>
+                    <div class="acrylic-input-wrapper compact-wrapper">
+                      <div class="ripple-host"></div>
+                      <div class="conic-glow-border"></div>
+                      <input 
+                        type="text" 
+                        class="acrylic-input-core" 
+                        id="download-end-time" 
+                        placeholder=" "
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <label class="floating-acrylic-label" for="download-end-time">00:00:00 (blank = end)</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- System Info Strip -->
             <div class="system-info-strip">
               <div class="info-item">
