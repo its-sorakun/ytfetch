@@ -3,17 +3,21 @@ Implementation details:
 FastAPI backend service providing REST, file streaming, and Server-Sent Events (SSE) interfaces.
 Coordinates asynchronous background execution of YouTube video downloads and FFmpeg media enhancement.
 Streams real-time progress metrics to connected web clients using persistent HTTP event streams.
-Supports direct binary video file uploads and local media stream previews for the web player interface.
+Supports direct binary video file uploads, local media stream previews, and Windows Explorer file revelation.
 """
 
 import asyncio
+from datetime import datetime
 import json
 import os
-import shutil
-import threading
-import uuid
 from pathlib import Path
+import shutil
+import subprocess
+import sys
+import threading
 from typing import Optional
+import uuid
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -31,7 +35,7 @@ from core.enhancer import (
     execute_ffmpeg_process,
 )
 
-app = FastAPI(title="YouTube Media Suite Web API")
+app = FastAPI(title="YtFetch Web API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +59,10 @@ class EnhanceRequest(BaseModel):
     end_time: Optional[str] = None
     mode: str = "crf"
     bitrate: Optional[str] = "25M"
+
+
+class RevealRequest(BaseModel):
+    path: str
 
 
 def update_job_status(job_id: str, **kwargs) -> None:
@@ -282,7 +290,6 @@ async def upload_video_file(file: UploadFile = File(...)):
     target_directory = resolve_download_directory()
     original_name = Path(file.filename).name
 
-    # Sanitize and resolve unique file path
     destination_path = target_directory / original_name
     counter = 1
     stem = destination_path.stem
@@ -320,7 +327,6 @@ async def stream_local_video(path: str = Query(..., description="Absolute path t
     if resolved_path.suffix.lower() not in valid_extensions:
         raise HTTPException(status_code=400, detail="Invalid media file extension.")
 
-    # Determine media type for standard containers
     extension_map = {
         ".mp4": "video/mp4",
         ".m4v": "video/mp4",
@@ -337,10 +343,32 @@ async def stream_local_video(path: str = Query(..., description="Absolute path t
     )
 
 
+@app.post("/api/reveal-in-explorer")
+async def reveal_file_in_explorer(request: RevealRequest):
+    """
+    Invokes the Windows File Explorer process highlighting the designated file on the host filesystem.
+    """
+    cleaned_path = request.path.strip("\"'")
+    target_path = Path(cleaned_path).resolve()
+
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Designated file does not exist on filesystem.")
+
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer.exe", f"/select,{str(target_path)}"])
+        else:
+            subprocess.Popen(["xdg-open", str(target_path.parent)])
+        return {"status": "success", "message": f"Revealed {target_path.name} in Explorer."}
+    except Exception as execution_error:
+        raise HTTPException(status_code=500, detail=f"Failed to launch explorer: {execution_error}")
+
+
 @app.get("/api/recent-downloads")
 async def get_recent_downloads():
     """
-    Scans the designated download directory and enumerates recently downloaded video files.
+    Scans the designated download directory and enumerates recently downloaded video files,
+    including modification epoch timestamps and formatted date-time strings.
     """
     download_folder = resolve_download_directory()
     valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov"}
@@ -352,17 +380,20 @@ async def get_recent_downloads():
                 try:
                     stat = file_path.stat()
                     size_mb = round(stat.st_size / (1024 * 1024), 2)
+                    dt = datetime.fromtimestamp(stat.st_mtime)
+                    formatted_time = dt.strftime("%b %d, %Y • %I:%M %p")
                     files.append({
                         "name": file_path.name,
                         "path": str(file_path),
                         "size_mb": size_mb,
-                        "modified": stat.st_mtime,
+                        "modified_timestamp": stat.st_mtime,
+                        "modified_formatted": formatted_time,
                     })
                 except OSError:
                     continue
 
-    files.sort(key=lambda item: item["modified"], reverse=True)
-    return {"downloads_directory": str(download_folder), "files": files[:15]}
+    files.sort(key=lambda item: item["modified_timestamp"], reverse=True)
+    return {"downloads_directory": str(download_folder), "files": files}
 
 
 static_directory = Path(__file__).parent / "static"

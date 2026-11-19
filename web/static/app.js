@@ -2,11 +2,15 @@
 Implementation details:
 Client-side presentation logic managing dual-theme states, animated tab navigation,
 dynamic click ripples, video file uploads with drag-and-drop, inline video playback previews,
-timecode synchronization, and Server-Sent Events (SSE) telemetry listeners.
-Executes purely using native modern browser APIs without external dependencies.
+timecode synchronization, Windows Explorer file revelation, sorting controls,
+and Server-Sent Events (SSE) telemetry listeners.
+Integrates Lucide icons for modern Windows 11 Fluent iconography.
 */
 
+let cachedRecentFiles = [];
+
 document.addEventListener("DOMContentLoaded", () => {
+  initializeLucide();
   initializeTheme();
   initializeTabs();
   initializeClickRipples();
@@ -16,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeVideoPreviewPlayer();
   initializeDownloadHandler();
   initializeEnhanceHandler();
+  initializeRecentSortHandler();
   loadRecentDownloads();
 
   const refreshBtn = document.getElementById("refresh-recent-btn");
@@ -24,10 +29,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+/* Lucide Icon Renderer */
+function initializeLucide() {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
 /* Light and Dark Theme Controller */
 function initializeTheme() {
   const themeToggleBtn = document.getElementById("theme-toggle");
-  const storedTheme = localStorage.getItem("media-suite-theme");
+  const storedTheme = localStorage.getItem("ytfetch-theme");
   const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
   const activeTheme = storedTheme || (systemPrefersDark ? "dark" : "light");
@@ -39,14 +51,15 @@ function initializeTheme() {
       const nextTheme = currentTheme === "dark" ? "light" : "dark";
 
       document.documentElement.setAttribute("data-theme", nextTheme);
-      localStorage.setItem("media-suite-theme", nextTheme);
+      localStorage.setItem("ytfetch-theme", nextTheme);
+      initializeLucide();
     });
   }
 }
 
 /* Segmented Tab Navigation */
 function initializeTabs() {
-  const tabButtons = document.querySelectorAll(".tab-button");
+  const tabButtons = document.querySelectorAll(".win11-tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
   const tabSlider = document.getElementById("tab-slider");
 
@@ -58,7 +71,7 @@ function initializeTabs() {
     tabSlider.style.width = `${clientWidth}px`;
   }
 
-  const initialActive = document.querySelector(".tab-button.active");
+  const initialActive = document.querySelector(".win11-tab-btn.active");
   if (initialActive) {
     updateSliderPosition(initialActive);
   }
@@ -85,11 +98,12 @@ function initializeTabs() {
       }
 
       updateSliderPosition(button);
+      initializeLucide();
     });
   });
 
   window.addEventListener("resize", () => {
-    const currentActive = document.querySelector(".tab-button.active");
+    const currentActive = document.querySelector(".win11-tab-btn.active");
     if (currentActive) {
       updateSliderPosition(currentActive);
     }
@@ -349,6 +363,7 @@ function initializeDownloadHandler() {
   const urlInput = document.getElementById("youtube-url-input");
   const submitBtn = document.getElementById("start-download-btn");
   const spinner = document.getElementById("download-spinner");
+  const btnIcon = document.getElementById("download-btn-icon");
 
   const statusCard = document.getElementById("download-status-card");
   const statusBadge = document.getElementById("download-status-badge");
@@ -368,6 +383,7 @@ function initializeDownloadHandler() {
 
     submitBtn.disabled = true;
     spinner.classList.add("active");
+    if (btnIcon) btnIcon.style.display = "none";
     statusCard.style.display = "flex";
 
     statusBadge.className = "status-badge";
@@ -399,6 +415,7 @@ function initializeDownloadHandler() {
       statusMsg.textContent = err.message;
       submitBtn.disabled = false;
       spinner.classList.remove("active");
+      if (btnIcon) btnIcon.style.display = "inline-block";
     }
   });
 
@@ -435,6 +452,7 @@ function initializeDownloadHandler() {
           statusMsg.textContent = "Video successfully saved into Downloads/ytdownload!";
           submitBtn.disabled = false;
           spinner.classList.remove("active");
+          if (btnIcon) btnIcon.style.display = "inline-block";
           eventSource.close();
           loadRecentDownloads();
         } else if (data.status === "failed") {
@@ -443,10 +461,11 @@ function initializeDownloadHandler() {
           statusMsg.textContent = data.error || "An error occurred during extraction.";
           submitBtn.disabled = false;
           spinner.classList.remove("active");
+          if (btnIcon) btnIcon.style.display = "inline-block";
           eventSource.close();
         }
-      } catch (e) {
-        // Continue processing incoming frames
+      } catch {
+        // Continue processing
       }
     };
 
@@ -454,6 +473,7 @@ function initializeDownloadHandler() {
       eventSource.close();
       submitBtn.disabled = false;
       spinner.classList.remove("active");
+      if (btnIcon) btnIcon.style.display = "inline-block";
     };
   }
 }
@@ -467,6 +487,7 @@ function initializeEnhanceHandler() {
   const bitrateInput = document.getElementById("enhance-bitrate-input");
   const submitBtn = document.getElementById("start-enhance-btn");
   const spinner = document.getElementById("enhance-spinner");
+  const btnIcon = document.getElementById("enhance-btn-icon");
 
   const statusCard = document.getElementById("enhance-status-card");
   const statusBadge = document.getElementById("enhance-status-badge");
@@ -497,6 +518,7 @@ function initializeEnhanceHandler() {
 
     submitBtn.disabled = true;
     spinner.classList.add("active");
+    if (btnIcon) btnIcon.style.display = "none";
     statusCard.style.display = "flex";
     outputPathBox.style.display = "none";
 
@@ -525,6 +547,7 @@ function initializeEnhanceHandler() {
       statusMsg.textContent = err.message;
       submitBtn.disabled = false;
       spinner.classList.remove("active");
+      if (btnIcon) btnIcon.style.display = "inline-block";
     }
   });
 
@@ -557,6 +580,7 @@ function initializeEnhanceHandler() {
 
           submitBtn.disabled = false;
           spinner.classList.remove("active");
+          if (btnIcon) btnIcon.style.display = "inline-block";
           eventSource.close();
           loadRecentDownloads();
         } else if (data.status === "failed") {
@@ -565,9 +589,10 @@ function initializeEnhanceHandler() {
           statusMsg.textContent = data.error || "FFmpeg processing encountered an error.";
           submitBtn.disabled = false;
           spinner.classList.remove("active");
+          if (btnIcon) btnIcon.style.display = "inline-block";
           eventSource.close();
         }
-      } catch (e) {
+      } catch {
         // Continue processing
       }
     };
@@ -576,77 +601,184 @@ function initializeEnhanceHandler() {
       eventSource.close();
       submitBtn.disabled = false;
       spinner.classList.remove("active");
+      if (btnIcon) btnIcon.style.display = "inline-block";
     };
   }
 }
 
-/* Fetch and Render Recent Downloads */
+/* Sorting Controller */
+function initializeRecentSortHandler() {
+  const sortSelect = document.getElementById("recent-sort-select");
+  if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+      renderRecentDownloads();
+    });
+  }
+}
+
+/* Fetch and Cache Recent Downloads */
 async function loadRecentDownloads() {
-  const container = document.getElementById("recent-downloads-list");
   const countBadge = document.getElementById("recent-count");
-  if (!container) return;
 
   try {
     const response = await fetch("/api/recent-downloads");
     if (!response.ok) return;
 
     const data = await response.json();
-    const files = data.files || [];
+    cachedRecentFiles = data.files || [];
 
     if (countBadge) {
-      countBadge.textContent = files.length;
+      countBadge.textContent = cachedRecentFiles.length;
     }
 
-    if (files.length === 0) {
-      container.innerHTML = '<div class="empty-list-placeholder">No recent media files located in Downloads/ytdownload.</div>';
-      return;
-    }
-
-    container.innerHTML = "";
-    files.forEach((file) => {
-      const item = document.createElement("div");
-      item.className = "recent-item";
-
-      const info = document.createElement("div");
-      info.className = "recent-file-info";
-
-      const name = document.createElement("span");
-      name.className = "recent-name";
-      name.textContent = file.name;
-
-      const meta = document.createElement("span");
-      meta.className = "recent-meta";
-      meta.textContent = `${file.size_mb} MB`;
-
-      info.appendChild(name);
-      info.appendChild(meta);
-
-      const actions = document.createElement("div");
-      actions.className = "recent-actions";
-
-      const previewBtn = document.createElement("button");
-      previewBtn.className = "recent-preview-btn";
-      previewBtn.textContent = "Preview";
-      previewBtn.addEventListener("click", () => {
-        sendToEnhancer(file.path, true);
-      });
-
-      const sendBtn = document.createElement("button");
-      sendBtn.className = "recent-send-btn";
-      sendBtn.textContent = "Enhance";
-      sendBtn.addEventListener("click", () => {
-        sendToEnhancer(file.path, false);
-      });
-
-      actions.appendChild(previewBtn);
-      actions.appendChild(sendBtn);
-
-      item.appendChild(info);
-      item.appendChild(actions);
-      container.appendChild(item);
-    });
+    renderRecentDownloads();
   } catch {
-    container.innerHTML = '<div class="empty-list-placeholder">Failed to query download directory.</div>';
+    const container = document.getElementById("recent-downloads-list");
+    if (container) {
+      container.innerHTML = '<div class="empty-list-placeholder"><span>Failed to query download directory.</span></div>';
+    }
+  }
+}
+
+/* Render Recent Downloads with Sorting */
+function renderRecentDownloads() {
+  const container = document.getElementById("recent-downloads-list");
+  const sortSelect = document.getElementById("recent-sort-select");
+  if (!container) return;
+
+  if (cachedRecentFiles.length === 0) {
+    container.innerHTML = `
+      <div class="empty-list-placeholder">
+        <i data-lucide="film" class="empty-placeholder-icon"></i>
+        <span>No media files located in Downloads/ytdownload</span>
+      </div>
+    `;
+    initializeLucide();
+    return;
+  }
+
+  const sortMode = sortSelect ? sortSelect.value : "newest";
+  const filesCopy = [...cachedRecentFiles];
+
+  if (sortMode === "newest") {
+    filesCopy.sort((a, b) => b.modified_timestamp - a.modified_timestamp);
+  } else if (sortMode === "oldest") {
+    filesCopy.sort((a, b) => a.modified_timestamp - b.modified_timestamp);
+  } else if (sortMode === "name") {
+    filesCopy.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortMode === "size") {
+    filesCopy.sort((a, b) => b.size_mb - a.size_mb);
+  }
+
+  container.innerHTML = "";
+  filesCopy.forEach((file) => {
+    const item = document.createElement("div");
+    item.className = "recent-item";
+
+    const itemTop = document.createElement("div");
+    itemTop.className = "recent-item-top";
+
+    const iconDiv = document.createElement("div");
+    iconDiv.className = "recent-file-icon";
+    iconDiv.innerHTML = '<i data-lucide="film"></i>';
+
+    const info = document.createElement("div");
+    info.className = "recent-file-info";
+
+    const name = document.createElement("span");
+    name.className = "recent-name";
+    name.textContent = file.name;
+    name.title = file.name;
+
+    const timeRow = document.createElement("div");
+    timeRow.className = "recent-timestamp-row";
+
+    const sizeBadge = document.createElement("span");
+    sizeBadge.className = "recent-size-badge";
+    sizeBadge.textContent = `${file.size_mb} MB`;
+
+    const separator = document.createElement("span");
+    separator.textContent = "•";
+
+    const dateSpan = document.createElement("span");
+    dateSpan.textContent = file.modified_formatted || "Unknown date";
+
+    timeRow.appendChild(sizeBadge);
+    timeRow.appendChild(separator);
+    timeRow.appendChild(dateSpan);
+
+    info.appendChild(name);
+    info.appendChild(timeRow);
+
+    itemTop.appendChild(iconDiv);
+    itemTop.appendChild(info);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "recent-actions-row";
+
+    // Reveal in Windows Explorer Action Button
+    const explorerBtn = document.createElement("button");
+    explorerBtn.className = "recent-btn btn-explorer";
+    explorerBtn.innerHTML = '<i data-lucide="folder-open"></i> Explorer';
+    explorerBtn.title = "Reveal in Windows Explorer";
+    explorerBtn.addEventListener("click", async () => {
+      await revealFileInExplorer(file.path, explorerBtn);
+    });
+
+    // Preview Action Button
+    const previewBtn = document.createElement("button");
+    previewBtn.className = "recent-btn btn-preview";
+    previewBtn.innerHTML = '<i data-lucide="play"></i> Preview';
+    previewBtn.title = "Preview video in player";
+    previewBtn.addEventListener("click", () => {
+      sendToEnhancer(file.path, true);
+    });
+
+    // Enhance Action Button
+    const enhanceBtn = document.createElement("button");
+    enhanceBtn.className = "recent-btn btn-enhance";
+    enhanceBtn.innerHTML = '<i data-lucide="wand-2"></i> Enhance';
+    enhanceBtn.title = "Load into Enhancer tab";
+    enhanceBtn.addEventListener("click", () => {
+      sendToEnhancer(file.path, false);
+    });
+
+    actionsRow.appendChild(explorerBtn);
+    actionsRow.appendChild(previewBtn);
+    actionsRow.appendChild(enhanceBtn);
+
+    item.appendChild(itemTop);
+    item.appendChild(actionsRow);
+    container.appendChild(item);
+  });
+
+  initializeLucide();
+}
+
+/* Call backend API to reveal file in Windows Explorer */
+async function revealFileInExplorer(filePath, buttonElement) {
+  try {
+    const originalText = buttonElement.innerHTML;
+    buttonElement.innerHTML = '<i data-lucide="check"></i> Opening...';
+    initializeLucide();
+
+    const response = await fetch("/api/reveal-in-explorer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: filePath }),
+    });
+
+    setTimeout(() => {
+      buttonElement.innerHTML = originalText;
+      initializeLucide();
+    }, 1200);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      alert(`Explorer error: ${errorData.detail}`);
+    }
+  } catch (err) {
+    alert(`Could not reveal in Explorer: ${err.message}`);
   }
 }
 
