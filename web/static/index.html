@@ -193,22 +193,13 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
         <div class="tab-panel" id="tab-enhancer" role="tabpanel">
           <div class="panel-hero">
             <h2 class="panel-title">Video Clipper & Enhancer</h2>
-            <p class="panel-subtitle">Upload or select a local video, preview frames, clip exact intervals, and remaster with dedicated GPU acceleration.</p>
+            <p class="panel-subtitle">Upload or select a local video, preview frames, clip exact intervals, and remaster with dedicated GPU hardware acceleration.</p>
           </div>
 
           <form class="action-form" id="enhance-form">
             <!-- Source Selection Group: Collapses when file is loaded -->
             <div class="form-field-group" id="source-selection-group">
               <label class="field-label">Source Video File</label>
-
-              <!-- Loaded compact summary (Shown when file is selected/previewed) -->
-              <div class="loaded-source-bar" id="loaded-source-bar" style="display: none;">
-                <div class="loaded-source-info">
-                  <span class="loaded-source-icon" data-fluent="video_clip_20_regular"></span>
-                  <span class="loaded-source-name" id="loaded-source-name">video.mp4</span>
-                </div>
-                <button type="button" class="loaded-change-btn" id="change-source-file-btn">Change file</button>
-              </div>
 
               <!-- Full dropzone and manual path picker (Hidden when file is loaded) -->
               <div id="source-picker-container">
@@ -260,12 +251,21 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
                 <div class="preview-title-group">
                   <span class="preview-badge"><span data-fluent="play_20_filled" class="preview-badge-icon"></span> Preview</span>
                   <span class="preview-filename" id="preview-filename-text">video.mp4</span>
+                  <span class="badge-mini" id="preview-ready-badge">Loaded</span>
                 </div>
-                <span class="preview-duration" id="preview-duration-text">00:00:00</span>
+                <div class="preview-header-actions">
+                  <span class="preview-duration" id="preview-duration-text">00:00:00</span>
+                  <button type="button" class="loaded-change-btn" id="change-source-file-btn">Change file</button>
+                </div>
               </div>
 
-              <div class="video-player-container">
+              <div class="video-player-container" id="video-player-container">
                 <video id="inline-video-player" controls preload="metadata"></video>
+                <div class="video-error-fallback" id="video-error-fallback" style="display: none;">
+                  <span class="error-fallback-icon" data-fluent="video_clip_24_regular"></span>
+                  <span class="error-fallback-title">Browser preview unavailable</span>
+                  <span class="error-fallback-desc" id="video-error-desc">This video format or codec is not directly decodable by the browser engine. The file is still fully valid and ready to be clipped or remastered with dedicated GPU acceleration.</span>
+                </div>
               </div>
 
               <div class="preview-timestamp-actions">
@@ -273,17 +273,16 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
                   <span class="ts-label">Playhead:</span>
                   <span class="ts-value" id="current-playhead-time">00:00:00</span>
                 </div>
-                <div class="timestamp-btn-group">
-                  <button type="button" class="ts-set-btn" id="set-start-ts-btn">Set as Start</button>
-                  <button type="button" class="ts-set-btn" id="set-end-ts-btn">Set as End</button>
-                </div>
               </div>
             </div>
 
             <!-- Time Range Input Grid -->
             <div class="time-range-grid">
               <div class="form-field-group">
-                <label class="field-label">Start Time (HH:MM:SS)</label>
+                <div class="field-label-row">
+                  <label class="field-label" for="enhance-start-time">Start Time (HH:MM:SS)</label>
+                  <button type="button" class="btn-micro-set" id="set-start-ts-btn">Set from Playhead</button>
+                </div>
                 <div class="acrylic-input-wrapper compact-wrapper" id="start-time-wrapper">
                   <div class="ripple-host"></div>
                   <div class="conic-glow-border"></div>
@@ -293,12 +292,15 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
                     id="enhance-start-time" 
                     placeholder=" "
                   />
-                  <label class="floating-acrylic-label" for="enhance-start-time">e.g. 00:01:30 (blank = start)</label>
+                  <label class="floating-acrylic-label" for="enhance-start-time">00:00:00 (blank = start)</label>
                 </div>
               </div>
 
               <div class="form-field-group">
-                <label class="field-label">End Time (HH:MM:SS)</label>
+                <div class="field-label-row">
+                  <label class="field-label" for="enhance-end-time">End Time (HH:MM:SS)</label>
+                  <button type="button" class="btn-micro-set" id="set-end-ts-btn">Set from Playhead</button>
+                </div>
                 <div class="acrylic-input-wrapper compact-wrapper" id="end-time-wrapper">
                   <div class="ripple-host"></div>
                   <div class="conic-glow-border"></div>
@@ -308,7 +310,7 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
                     id="enhance-end-time" 
                     placeholder=" "
                   />
-                  <label class="floating-acrylic-label" for="enhance-end-time">e.g. 00:03:00 (blank = end)</label>
+                  <label class="floating-acrylic-label" for="enhance-end-time">00:00:00 (blank = end)</label>
                 </div>
               </div>
             </div>
@@ -375,11 +377,40 @@ compact loaded media states, real-time download telemetry icons, and non-blockin
           <div class="status-card" id="enhance-status-card" style="display: none;">
             <div class="status-header">
               <span class="status-badge" id="enhance-status-badge">
-                <span class="status-badge-icon" data-fluent="wand_20_regular"></span>
-                <span>Processing</span>
+                <span class="status-badge-icon" id="enhance-status-badge-icon" data-fluent="wand_20_regular"></span>
+                <span id="enhance-status-badge-text">Processing</span>
               </span>
               <span class="status-filename" id="enhance-filename-display">Running FFmpeg...</span>
             </div>
+
+            <div class="status-progress-track">
+              <div class="status-progress-fill" id="enhance-progress-bar"></div>
+            </div>
+
+            <div class="status-metrics">
+              <div class="metric-block">
+                <span class="metric-label">
+                  <span class="metric-icon" data-fluent="sparkle_20_regular"></span>
+                  <span>Progress</span>
+                </span>
+                <span class="metric-value" id="enhance-metric-percent">0%</span>
+              </div>
+              <div class="metric-block">
+                <span class="metric-label">
+                  <span class="metric-icon" data-fluent="flash_20_regular"></span>
+                  <span>GPU Transcode Speed</span>
+                </span>
+                <span class="metric-value" id="enhance-metric-speed">--</span>
+              </div>
+              <div class="metric-block">
+                <span class="metric-label">
+                  <span class="metric-icon" data-fluent="gauge_20_regular"></span>
+                  <span>ETA</span>
+                </span>
+                <span class="metric-value" id="enhance-metric-eta">--</span>
+              </div>
+            </div>
+
             <p class="status-message" id="enhance-status-msg">Initializing...</p>
             <div class="output-path-box" id="enhance-output-path-box" style="display: none;">
               <span class="output-label">Enhanced Output:</span>
