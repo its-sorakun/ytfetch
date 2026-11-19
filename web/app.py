@@ -67,6 +67,8 @@ jobs_lock = threading.Lock()
 class DownloadRequest(BaseModel):
     url: str
     quality: Optional[str] = "best"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
 
 
 class EnhanceRequest(BaseModel):
@@ -107,9 +109,17 @@ def resolve_stream_format(quality_choice: str) -> tuple[str, str]:
     return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "mp4"
 
 
-def run_download_worker(job_id: str, target_url: str, output_directory: Path, quality: str) -> None:
+def run_download_worker(
+    job_id: str,
+    target_url: str,
+    output_directory: Path,
+    quality: str,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+) -> None:
     """
     Executes yt-dlp download in a background thread and forwards progress to the job store.
+    Supports section-based timestamp extraction via remote HTTP range slicing.
     """
     def progress_callback(status_data: dict) -> None:
         status = status_data.get("status", "downloading")
@@ -128,7 +138,12 @@ def run_download_worker(job_id: str, target_url: str, output_directory: Path, qu
         )
 
     format_selector, merge_format = resolve_stream_format(quality)
-    config = build_download_configuration(output_directory, progress_callback)
+    config = build_download_configuration(
+        output_directory,
+        progress_callback,
+        start_time=start_time,
+        end_time=end_time,
+    )
     config["format"] = format_selector
     config["merge_output_format"] = merge_format
 
@@ -242,7 +257,14 @@ async def start_download(request: DownloadRequest):
 
     worker_thread = threading.Thread(
         target=run_download_worker,
-        args=(job_id, clean_url, output_directory, request.quality or "best"),
+        args=(
+            job_id,
+            clean_url,
+            output_directory,
+            request.quality or "best",
+            request.start_time,
+            request.end_time,
+        ),
         daemon=True,
     )
     worker_thread.start()
