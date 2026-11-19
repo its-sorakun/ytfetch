@@ -1,0 +1,5 @@
+# Implementation details:
+# Project dependencies required for YouTube media downloading.
+# yt-dlp provides stream extraction, cipher handling, and format selection.
+yt-dlp>=2025.1.15
+
