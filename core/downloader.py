@@ -102,3 +102,4 @@ def download_youtube_video(
         error_message = f"Download failed due to an extraction or network error: {download_exception}"
         print(f"\n{error_message}", file=sys.stderr)
         return False, error_message
+

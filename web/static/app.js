@@ -1,15 +1,19 @@
 /*
 Implementation details:
-Client-side presentation logic managing tab state transitions, dynamic click ripples,
-Server-Sent Events (SSE) telemetry listeners, and API communications.
-Eliminates external UI dependencies by executing purely on native browser APIs.
+Client-side presentation logic managing dual-theme states, animated tab navigation,
+dynamic click ripples, video file uploads with drag-and-drop, inline video playback previews,
+timecode synchronization, and Server-Sent Events (SSE) telemetry listeners.
+Executes purely using native modern browser APIs without external dependencies.
 */
 
 document.addEventListener("DOMContentLoaded", () => {
+  initializeTheme();
   initializeTabs();
   initializeClickRipples();
   initializePasteButton();
   initializeModeSelector();
+  initializeVideoUploader();
+  initializeVideoPreviewPlayer();
   initializeDownloadHandler();
   initializeEnhanceHandler();
   loadRecentDownloads();
@@ -19,6 +23,26 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshBtn.addEventListener("click", loadRecentDownloads);
   }
 });
+
+/* Light and Dark Theme Controller */
+function initializeTheme() {
+  const themeToggleBtn = document.getElementById("theme-toggle");
+  const storedTheme = localStorage.getItem("media-suite-theme");
+  const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  const activeTheme = storedTheme || (systemPrefersDark ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", activeTheme);
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", () => {
+      const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+      const nextTheme = currentTheme === "dark" ? "light" : "dark";
+
+      document.documentElement.setAttribute("data-theme", nextTheme);
+      localStorage.setItem("media-suite-theme", nextTheme);
+    });
+  }
+}
 
 /* Segmented Tab Navigation */
 function initializeTabs() {
@@ -143,6 +167,180 @@ function initializeModeSelector() {
       }
     });
   });
+}
+
+/* File Upload & Drag-and-Drop Handler */
+function initializeVideoUploader() {
+  const dropzone = document.getElementById("upload-dropzone");
+  const fileInput = document.getElementById("video-file-input");
+  const overlay = document.getElementById("upload-progress-overlay");
+  const overlayText = document.getElementById("upload-progress-text");
+  const sourceInput = document.getElementById("enhance-source-input");
+
+  const togglePathBtn = document.getElementById("toggle-path-input-btn");
+  const pathContainer = document.getElementById("manual-path-container");
+  const accordionArrow = document.getElementById("accordion-arrow");
+
+  if (togglePathBtn && pathContainer) {
+    togglePathBtn.addEventListener("click", () => {
+      const isHidden = pathContainer.style.display === "none";
+      pathContainer.style.display = isHidden ? "block" : "none";
+      if (accordionArrow) {
+        accordionArrow.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+      }
+    });
+  }
+
+  if (!dropzone || !fileInput) return;
+
+  dropzone.addEventListener("click", (e) => {
+    if (e.target !== fileInput) {
+      fileInput.click();
+    }
+  });
+
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+
+  dropzone.addEventListener("dragleave", () => {
+    dropzone.classList.remove("dragover");
+  });
+
+  dropzone.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await uploadFileToServer(files[0]);
+    }
+  });
+
+  fileInput.addEventListener("change", async () => {
+    if (fileInput.files && fileInput.files.length > 0) {
+      await uploadFileToServer(fileInput.files[0]);
+    }
+  });
+
+  async function uploadFileToServer(file) {
+    if (!file) return;
+
+    overlay.style.display = "flex";
+    overlayText.textContent = `Uploading ${file.name}...`;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "File upload failed.");
+      }
+
+      const result = await response.json();
+      if (sourceInput) {
+        sourceInput.value = result.path;
+      }
+
+      overlayText.textContent = "Upload successful!";
+      setTimeout(() => {
+        overlay.style.display = "none";
+      }, 700);
+
+      loadVideoPreview(result.path, result.filename);
+      loadRecentDownloads();
+    } catch (err) {
+      alert(`Upload error: ${err.message}`);
+      overlay.style.display = "none";
+    }
+  }
+}
+
+/* Helper: Format seconds to HH:MM:SS */
+function formatSecondsToTimecode(totalSeconds) {
+  const rounded = Math.floor(totalSeconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const seconds = rounded % 60;
+
+  const paddedH = String(hours).padStart(2, "0");
+  const paddedM = String(minutes).padStart(2, "0");
+  const paddedS = String(seconds).padStart(2, "0");
+
+  return `${paddedH}:${paddedM}:${paddedS}`;
+}
+
+/* Integrated Video Playback Preview Player */
+function initializeVideoPreviewPlayer() {
+  const videoPlayer = document.getElementById("inline-video-player");
+  const playheadDisplay = document.getElementById("current-playhead-time");
+  const durationDisplay = document.getElementById("preview-duration-text");
+  const setStartBtn = document.getElementById("set-start-ts-btn");
+  const setEndBtn = document.getElementById("set-end-ts-btn");
+  const startInput = document.getElementById("enhance-start-time");
+  const endInput = document.getElementById("enhance-end-time");
+
+  if (!videoPlayer) return;
+
+  videoPlayer.addEventListener("timeupdate", () => {
+    if (playheadDisplay) {
+      playheadDisplay.textContent = formatSecondsToTimecode(videoPlayer.currentTime);
+    }
+  });
+
+  videoPlayer.addEventListener("loadedmetadata", () => {
+    if (durationDisplay) {
+      durationDisplay.textContent = formatSecondsToTimecode(videoPlayer.duration);
+    }
+  });
+
+  if (setStartBtn && startInput) {
+    setStartBtn.addEventListener("click", () => {
+      startInput.value = formatSecondsToTimecode(videoPlayer.currentTime);
+      startInput.focus();
+    });
+  }
+
+  if (setEndBtn && endInput) {
+    setEndBtn.addEventListener("click", () => {
+      endInput.value = formatSecondsToTimecode(videoPlayer.currentTime);
+      endInput.focus();
+    });
+  }
+
+  const manualSourceInput = document.getElementById("enhance-source-input");
+  if (manualSourceInput) {
+    manualSourceInput.addEventListener("change", () => {
+      const pathVal = manualSourceInput.value.trim();
+      if (pathVal) {
+        const displayName = pathVal.split(/[\\/]/).pop();
+        loadVideoPreview(pathVal, displayName);
+      }
+    });
+  }
+}
+
+/* Load media file into the preview player */
+function loadVideoPreview(absolutePath, displayName) {
+  const previewCard = document.getElementById("video-preview-card");
+  const videoPlayer = document.getElementById("inline-video-player");
+  const filenameText = document.getElementById("preview-filename-text");
+
+  if (!previewCard || !videoPlayer) return;
+
+  previewCard.style.display = "flex";
+  filenameText.textContent = displayName || absolutePath.split(/[\\/]/).pop() || "Video Preview";
+
+  const streamUrl = `/api/stream-video?path=${encodeURIComponent(absolutePath)}`;
+  videoPlayer.src = streamUrl;
+  videoPlayer.load();
 }
 
 /* Download Submission and SSE Progress Listener */
@@ -276,13 +474,17 @@ function initializeEnhanceHandler() {
   const statusMsg = document.getElementById("enhance-status-msg");
   const outputPathBox = document.getElementById("enhance-output-path-box");
   const outputPathVal = document.getElementById("enhance-output-path");
+  const previewOutputBtn = document.getElementById("preview-output-btn");
 
   if (!enhanceForm) return;
 
   enhanceForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const sourcePath = sourceInput.value.trim();
-    if (!sourcePath) return;
+    if (!sourcePath) {
+      alert("Please upload a video file or provide an absolute path first.");
+      return;
+    }
 
     const selectedMode = document.querySelector("input[name='enhance-mode']:checked").value;
     const payload = {
@@ -345,6 +547,12 @@ function initializeEnhanceHandler() {
           if (data.output_path) {
             outputPathBox.style.display = "flex";
             outputPathVal.textContent = data.output_path;
+
+            if (previewOutputBtn) {
+              previewOutputBtn.onclick = () => {
+                loadVideoPreview(data.output_path, data.output_path.split(/[\\/]/).pop());
+              };
+            }
           }
 
           submitBtn.disabled = false;
@@ -375,6 +583,7 @@ function initializeEnhanceHandler() {
 /* Fetch and Render Recent Downloads */
 async function loadRecentDownloads() {
   const container = document.getElementById("recent-downloads-list");
+  const countBadge = document.getElementById("recent-count");
   if (!container) return;
 
   try {
@@ -383,6 +592,10 @@ async function loadRecentDownloads() {
 
     const data = await response.json();
     const files = data.files || [];
+
+    if (countBadge) {
+      countBadge.textContent = files.length;
+    }
 
     if (files.length === 0) {
       container.innerHTML = '<div class="empty-list-placeholder">No recent media files located in Downloads/ytdownload.</div>';
@@ -403,20 +616,33 @@ async function loadRecentDownloads() {
 
       const meta = document.createElement("span");
       meta.className = "recent-meta";
-      meta.textContent = `${file.size_mb} MB • Click send to enhance`;
+      meta.textContent = `${file.size_mb} MB`;
 
       info.appendChild(name);
       info.appendChild(meta);
 
-      const sendBtn = document.createElement("button");
-      sendBtn.className = "recent-send-btn";
-      sendBtn.textContent = "Send to Enhancer";
-      sendBtn.addEventListener("click", () => {
-        sendToEnhancer(file.path);
+      const actions = document.createElement("div");
+      actions.className = "recent-actions";
+
+      const previewBtn = document.createElement("button");
+      previewBtn.className = "recent-preview-btn";
+      previewBtn.textContent = "Preview";
+      previewBtn.addEventListener("click", () => {
+        sendToEnhancer(file.path, true);
       });
 
+      const sendBtn = document.createElement("button");
+      sendBtn.className = "recent-send-btn";
+      sendBtn.textContent = "Enhance";
+      sendBtn.addEventListener("click", () => {
+        sendToEnhancer(file.path, false);
+      });
+
+      actions.appendChild(previewBtn);
+      actions.appendChild(sendBtn);
+
       item.appendChild(info);
-      item.appendChild(sendBtn);
+      item.appendChild(actions);
       container.appendChild(item);
     });
   } catch {
@@ -425,12 +651,17 @@ async function loadRecentDownloads() {
 }
 
 /* Transmit Selected File Path to Enhancer Tab */
-function sendToEnhancer(filePath) {
+function sendToEnhancer(filePath, shouldPreview) {
   const enhanceTabBtn = document.getElementById("tab-btn-enhancer");
   const sourceInput = document.getElementById("enhance-source-input");
 
   if (sourceInput) {
     sourceInput.value = filePath;
+  }
+
+  if (shouldPreview) {
+    const displayName = filePath.split(/[\\/]/).pop();
+    loadVideoPreview(filePath, displayName);
   }
 
   if (enhanceTabBtn) {

@@ -3,42 +3,72 @@
 Implementation details:
 Single Page Application (SPA) layout for YouTube Downloader and Video Enhancer.
 Structures the user interface into dual tabbed panels: Media Download and Video Enhancement.
-Provides acrylic blur containers, fluid interactive components, and real-time operational feedback meters.
+Provides acrylic blur containers, fluid interactive components, light/dark theme toggling,
+video upload dropzone, and integrated video playback preview.
 -->
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube Media Suite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="ambient-glow glow-top"></div>
-  <div class="ambient-glow glow-bottom"></div>
+  <!-- Animated ambient optical background blooms -->
+  <div class="ambient-glow glow-top" id="glow-1"></div>
+  <div class="ambient-glow glow-bottom" id="glow-2"></div>
+  <div class="ambient-glow glow-accent" id="glow-3"></div>
   <div class="acrylic-noise-overlay"></div>
 
   <div class="app-viewport">
-    <!-- Header with Acrylic Segmented Navigation -->
+    <!-- Header with Acrylic Segmented Navigation & Theme Toggle -->
     <header class="acrylic-header">
       <div class="brand-badge">
-        <span class="brand-glyph"></span>
+        <div class="brand-glyph-glow"></div>
         <span class="brand-title">MediaSuite</span>
+        <span class="version-tag">v2.0</span>
       </div>
 
-      <nav class="acrylic-tab-bar" role="tablist">
-        <button class="tab-button active" id="tab-btn-downloader" data-target="tab-downloader" role="tab" aria-selected="true">
-          <span class="tab-icon">↓</span>
-          <span class="tab-text">Downloader</span>
+      <div class="header-controls">
+        <nav class="acrylic-tab-bar" role="tablist">
+          <button class="tab-button active" id="tab-btn-downloader" data-target="tab-downloader" role="tab" aria-selected="true">
+            <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span class="tab-text">Downloader</span>
+          </button>
+          <button class="tab-button" id="tab-btn-enhancer" data-target="tab-enhancer" role="tab" aria-selected="false">
+            <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span class="tab-text">Enhancer</span>
+          </button>
+          <div class="tab-slider-pill" id="tab-slider"></div>
+        </nav>
+
+        <!-- Theme Toggle Button -->
+        <button class="theme-toggle-btn" id="theme-toggle" title="Toggle Light / Dark Mode" aria-label="Toggle theme">
+          <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
         </button>
-        <button class="tab-button" id="tab-btn-enhancer" data-target="tab-enhancer" role="tab" aria-selected="false">
-          <span class="tab-icon">✦</span>
-          <span class="tab-text">Enhancer</span>
-        </button>
-        <div class="tab-slider-pill" id="tab-slider"></div>
-      </nav>
+      </div>
     </header>
 
     <!-- Main Workspace Container -->
@@ -46,8 +76,9 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
       <!-- TAB 1: Downloader -->
       <section class="tab-panel active" id="tab-downloader" role="tabpanel">
         <div class="card-hero">
+          <div class="hero-chip">Media Extraction</div>
           <h1 class="hero-title">Download YouTube Stream</h1>
-          <p class="hero-subtitle">Fetches high-definition video and pristine audio merged into universal MP4 format</p>
+          <p class="hero-subtitle">Fetches high-definition video and separate audio streams, remuxing via FFmpeg into pristine MP4</p>
         </div>
 
         <form class="action-form" id="download-form">
@@ -66,7 +97,10 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
             />
             <label class="floating-acrylic-label" for="youtube-url-input">Paste YouTube video URL here...</label>
             <button type="button" class="paste-button" id="paste-url-btn" title="Paste from clipboard">
-              <span class="paste-icon">📋</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
             </button>
           </div>
 
@@ -109,8 +143,18 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
         <!-- Recent Downloads Section -->
         <div class="sub-section">
           <div class="sub-section-header">
-            <h2 class="sub-title">Recent Local Downloads</h2>
-            <button class="text-refresh-btn" id="refresh-recent-btn">Refresh</button>
+            <div class="section-title-wrap">
+              <h2 class="sub-title">Recent Downloads</h2>
+              <span class="badge-count" id="recent-count">0</span>
+            </div>
+            <button class="text-refresh-btn" id="refresh-recent-btn">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span>Refresh</span>
+            </button>
           </div>
           <div class="recent-list-container" id="recent-downloads-list">
             <div class="empty-list-placeholder">No recent media files located in Downloads/ytdownload.</div>
@@ -121,29 +165,92 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
       <!-- TAB 2: Enhancer -->
       <section class="tab-panel" id="tab-enhancer" role="tabpanel">
         <div class="card-hero">
+          <div class="hero-chip">Media Mastering</div>
           <h1 class="hero-title">Video Clipper & Enhancer</h1>
-          <p class="hero-subtitle">High-fidelity unsharp filtering, CRF rate mastering, and rapid seeking for long files</p>
+          <p class="hero-subtitle">Upload or select a file, preview frames, clip exact intervals, and remaster with unsharp filters</p>
         </div>
 
         <form class="action-form" id="enhance-form">
+          <!-- Video Source Selector (Upload or Local Path) -->
           <div class="form-field-group">
-            <label class="field-label">Source Video File Path</label>
-            <div class="acrylic-input-wrapper file-input-wrapper" id="file-input-wrapper">
-              <div class="ripple-host" id="file-ripple-host"></div>
-              <div class="conic-glow-border"></div>
-              <input 
-                type="text" 
-                class="acrylic-input-core" 
-                id="enhance-source-input" 
-                placeholder=" "
-                autocomplete="off"
-                spellcheck="false"
-                required
-              />
-              <label class="floating-acrylic-label" for="enhance-source-input">Path to video file (or select from recent below)...</label>
+            <label class="field-label">Source Video File</label>
+
+            <!-- Drag & Drop Upload Zone -->
+            <div class="upload-dropzone" id="upload-dropzone">
+              <input type="file" id="video-file-input" accept="video/mp4,video/mkv,video/webm,video/avi,video/quicktime" class="hidden-file-input">
+              <div class="dropzone-content">
+                <div class="dropzone-icon-circle">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </div>
+                <div class="dropzone-text-group">
+                  <span class="dropzone-primary-text">Drag & drop video file here, or <span class="accent-link">Browse files</span></span>
+                  <span class="dropzone-secondary-text">Supports MP4, MKV, WebM, MOV, AVI</span>
+                </div>
+              </div>
+              <div class="upload-progress-overlay" id="upload-progress-overlay" style="display: none;">
+                <span class="btn-spinner active"></span>
+                <span id="upload-progress-text">Uploading to suite...</span>
+              </div>
+            </div>
+
+            <!-- Alternate Manual Path Accordion -->
+            <div class="manual-path-accordion">
+              <button type="button" class="accordion-toggle-btn" id="toggle-path-input-btn">
+                <span>Or enter an absolute file path manually</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" id="accordion-arrow">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+
+              <div class="accordion-content" id="manual-path-container" style="display: none;">
+                <div class="acrylic-input-wrapper compact-wrapper file-input-wrapper" id="file-input-wrapper">
+                  <div class="ripple-host" id="file-ripple-host"></div>
+                  <div class="conic-glow-border"></div>
+                  <input 
+                    type="text" 
+                    class="acrylic-input-core" 
+                    id="enhance-source-input" 
+                    placeholder=" "
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <label class="floating-acrylic-label" for="enhance-source-input">Absolute path to video...</label>
+                </div>
+              </div>
             </div>
           </div>
 
+          <!-- Video Playback Preview Card -->
+          <div class="preview-card" id="video-preview-card" style="display: none;">
+            <div class="preview-header">
+              <div class="preview-title-group">
+                <span class="preview-badge">Preview</span>
+                <span class="preview-filename" id="preview-filename-text">video.mp4</span>
+              </div>
+              <span class="preview-duration" id="preview-duration-text">00:00</span>
+            </div>
+
+            <div class="video-player-container">
+              <video id="inline-video-player" controls preload="metadata"></video>
+            </div>
+
+            <div class="preview-timestamp-actions">
+              <div class="timestamp-display-box">
+                <span class="ts-label">Current Playhead:</span>
+                <span class="ts-value" id="current-playhead-time">00:00:00</span>
+              </div>
+              <div class="timestamp-btn-group">
+                <button type="button" class="ts-set-btn" id="set-start-ts-btn">Set as Start Time</button>
+                <button type="button" class="ts-set-btn" id="set-end-ts-btn">Set as End Time</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Time Range Input Grid -->
           <div class="time-range-grid">
             <div class="form-field-group">
               <label class="field-label">Start Time (HH:MM:SS or seconds)</label>
@@ -176,13 +283,17 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
             </div>
           </div>
 
+          <!-- Profile Selector -->
           <div class="form-field-group">
             <label class="field-label">Mastering Profile</label>
             <div class="profile-selector">
               <label class="profile-option">
                 <input type="radio" name="enhance-mode" value="crf" checked id="mode-crf">
                 <div class="profile-box">
-                  <span class="profile-title">High-Fidelity Perceptual (Recommended)</span>
+                  <div class="profile-box-header">
+                    <span class="profile-title">High-Fidelity Perceptual</span>
+                    <span class="badge-mini">Recommended</span>
+                  </div>
                   <span class="profile-desc">CRF 17, slow preset, unsharp edge filter, 320k AAC audio</span>
                 </div>
               </label>
@@ -190,7 +301,9 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
               <label class="profile-option">
                 <input type="radio" name="enhance-mode" value="target_bitrate" id="mode-bitrate">
                 <div class="profile-box">
-                  <span class="profile-title">Explicit Target Bitrate</span>
+                  <div class="profile-box-header">
+                    <span class="profile-title">Explicit Target Bitrate</span>
+                  </div>
                   <span class="profile-desc">Fixed high-bitrate budget for video editing suites</span>
                 </div>
               </label>
@@ -231,6 +344,7 @@ Provides acrylic blur containers, fluid interactive components, and real-time op
           <div class="output-path-box" id="enhance-output-path-box" style="display: none;">
             <span class="output-label">Enhanced Output:</span>
             <span class="output-value" id="enhance-output-path"></span>
+            <button type="button" class="preview-output-btn" id="preview-output-btn">Preview Enhanced Result in Player</button>
           </div>
         </div>
       </section>

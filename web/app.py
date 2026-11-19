@@ -1,18 +1,20 @@
 """
 Implementation details:
-FastAPI backend service providing REST and Server-Sent Events (SSE) interfaces.
+FastAPI backend service providing REST, file streaming, and Server-Sent Events (SSE) interfaces.
 Coordinates asynchronous background execution of YouTube video downloads and FFmpeg media enhancement.
 Streams real-time progress metrics to connected web clients using persistent HTTP event streams.
-Discovers local media files in the designated download folder for quick selection within the UI.
+Supports direct binary video file uploads and local media stream previews for the web player interface.
 """
 
 import asyncio
 import json
+import os
+import shutil
 import threading
 import uuid
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,7 +31,7 @@ from core.enhancer import (
     execute_ffmpeg_process,
 )
 
-app = FastAPI(title="YouTube Downloader & Enhancer Web API")
+app = FastAPI(title="YouTube Media Suite Web API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -268,6 +270,70 @@ async def stream_enhance_progress(job_id: str):
         event_generator(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+@app.post("/api/upload")
+async def upload_video_file(file: UploadFile = File(...)):
+    """
+    Accepts video file uploads from the web client, saves the binary data
+    to the ytdownload directory, and returns the absolute local path for immediate preview and processing.
+    """
+    target_directory = resolve_download_directory()
+    original_name = Path(file.filename).name
+
+    # Sanitize and resolve unique file path
+    destination_path = target_directory / original_name
+    counter = 1
+    stem = destination_path.stem
+    suffix = destination_path.suffix
+
+    while destination_path.exists():
+        destination_path = target_directory / f"{stem}_{counter}{suffix}"
+        counter += 1
+
+    try:
+        with open(destination_path, "wb") as output_stream:
+            shutil.copyfileobj(file.file, output_stream)
+    except Exception as io_error:
+        raise HTTPException(status_code=500, detail=f"File storage failed: {io_error}")
+
+    file_size_mb = round(destination_path.stat().st_size / (1024 * 1024), 2)
+    return {
+        "filename": destination_path.name,
+        "path": str(destination_path),
+        "size_mb": file_size_mb,
+    }
+
+
+@app.get("/api/stream-video")
+async def stream_local_video(path: str = Query(..., description="Absolute path to local media file")):
+    """
+    Provides streaming responses for local media files to allow real-time browser video playback and preview.
+    """
+    resolved_path = Path(path.strip("\"'")).resolve()
+
+    if not resolved_path.is_file():
+        raise HTTPException(status_code=404, detail="Requested media file not found.")
+
+    valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v"}
+    if resolved_path.suffix.lower() not in valid_extensions:
+        raise HTTPException(status_code=400, detail="Invalid media file extension.")
+
+    # Determine media type for standard containers
+    extension_map = {
+        ".mp4": "video/mp4",
+        ".m4v": "video/mp4",
+        ".webm": "video/webm",
+        ".mkv": "video/x-matroska",
+        ".mov": "video/quicktime",
+    }
+    media_type = extension_map.get(resolved_path.suffix.lower(), "video/mp4")
+
+    return FileResponse(
+        path=resolved_path,
+        media_type=media_type,
+        filename=resolved_path.name,
     )
 
 

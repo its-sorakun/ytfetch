@@ -106,3 +106,4 @@ def execute_ffmpeg_process(
     except subprocess.CalledProcessError as process_error:
         error_text = f"FFmpeg failed with exit code {process_error.returncode}: {process_error.stderr}"
         return False, error_text
+
