@@ -216,3 +216,4 @@ def run_enhancer_cli() -> int:
 
 if __name__ == "__main__":
     sys.exit(run_enhancer_cli())
+
