@@ -9,12 +9,92 @@ over remote HTTP byte-ranges without downloading entire video streams.
 Supports standard console progress output as well as structured callback hooks for web progress streaming.
 """
 
+import re
 import sys
+import threading
+import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 import yt_dlp
+import yt_dlp.downloader.external
+from yt_dlp.downloader.external import FFmpegFD
 from yt_dlp.utils import DownloadError, download_range_func
 from core.enhancer import parse_time_to_seconds
+
+_ORIGINAL_FFMPEG_CALL = FFmpegFD._call_downloader
+_ORIGINAL_POPEN = yt_dlp.downloader.external.Popen
+
+
+def _telemetry_ffmpeg_call(self, tmpfilename, info_dict):
+    """
+    Wraps FFmpegFD._call_downloader to capture FFmpeg transcode progress via standard pipes.
+    Standard yt-dlp FFmpegFD does not emit progress hooks during transcoding.
+    Injects -progress pipe:1 and streams calculated percentage, speed, and ETA metrics to progress hooks.
+    """
+    start_time = info_dict.get("section_start") or 0.0
+    end_time = info_dict.get("section_end")
+    duration = max(1.0, (end_time - start_time)) if end_time else (info_dict.get("duration") or 0.0)
+
+    def progress_popen(args, *p_args, **p_kwargs):
+        cmd = list(args)
+        if "-progress" not in cmd:
+            cmd[1:1] = ["-progress", "pipe:1", "-nostats"]
+        p_kwargs["stdout"] = subprocess.PIPE
+        p_kwargs["text"] = True
+        p_kwargs["bufsize"] = 1
+        proc = _ORIGINAL_POPEN(cmd, *p_args, **p_kwargs)
+
+        def monitor_stdout():
+            curr_speed = "1.0x"
+            if proc.stdout:
+                for line in proc.stdout:
+                    line = line.strip()
+                    if not line or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    if key == "speed":
+                        curr_speed = val.strip()
+                    elif key == "out_time_us":
+                        try:
+                            elapsed = float(val) / 1_000_000.0
+                            if duration > 0:
+                                pct = min(99.0, max(0.0, (elapsed / duration) * 100.0))
+                                pct_str = f"{pct:.0f}%"
+                                speed_match = re.search(r"([0-9.]+)x", curr_speed)
+                                speed_mult = float(speed_match.group(1)) if speed_match else 1.0
+                                if speed_mult > 0.05:
+                                    rem_sec = max(0, int((duration - elapsed) / speed_mult))
+                                    eta_str = f"{rem_sec // 60:02d}:{rem_sec % 60:02d}"
+                                else:
+                                    eta_str = "--:--"
+                            else:
+                                pct_str = f"{int(elapsed)}s"
+                                eta_str = "--:--"
+
+                            self._hook_progress({
+                                "status": "downloading",
+                                "_percent_str": pct_str,
+                                "_speed_str": curr_speed,
+                                "_eta_str": eta_str,
+                                "filename": tmpfilename,
+                                "downloaded_bytes": int(elapsed * 1000),
+                                "total_bytes": int(duration * 1000),
+                            }, info_dict)
+                        except (ValueError, ZeroDivisionError):
+                            pass
+
+        monitor_thread = threading.Thread(target=monitor_stdout, daemon=True)
+        monitor_thread.start()
+        return proc
+
+    yt_dlp.downloader.external.Popen = progress_popen
+    try:
+        return _ORIGINAL_FFMPEG_CALL(self, tmpfilename, info_dict)
+    finally:
+        yt_dlp.downloader.external.Popen = _ORIGINAL_POPEN
+
+
+FFmpegFD._call_downloader = _telemetry_ffmpeg_call
 
 
 def format_timestamp_tag(timestamp_str: Optional[str]) -> str:
