@@ -1,5 +1,6 @@
 # Implementation details:
-# Project dependencies required for YouTube media downloading.
-# yt-dlp provides stream extraction, cipher handling, and format selection.
-yt-dlp>=2025.1.15
-
+# Application dependencies for media downloading, video enhancement, and web interface.
+# Dependencies omit version pins to enable installation of current packages without conflicts.
+yt-dlp
+fastapi
+uvicorn[standard]

@@ -1,0 +1,8 @@
+# Implementation details:
+# Excludes local virtual environments, bytecode caches, and temporary artifacts from version control.
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/

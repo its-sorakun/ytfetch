@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<!--
+Implementation details:
+Single Page Application (SPA) layout for YouTube Downloader and Video Enhancer.
+Structures the user interface into dual tabbed panels: Media Download and Video Enhancement.
+Provides acrylic blur containers, fluid interactive components, and real-time operational feedback meters.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Media Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="ambient-glow glow-top"></div>
+  <div class="ambient-glow glow-bottom"></div>
+  <div class="acrylic-noise-overlay"></div>
+
+  <div class="app-viewport">
+    <!-- Header with Acrylic Segmented Navigation -->
+    <header class="acrylic-header">
+      <div class="brand-badge">
+        <span class="brand-glyph"></span>
+        <span class="brand-title">MediaSuite</span>
+      </div>
+
+      <nav class="acrylic-tab-bar" role="tablist">
+        <button class="tab-button active" id="tab-btn-downloader" data-target="tab-downloader" role="tab" aria-selected="true">
+          <span class="tab-icon">↓</span>
+          <span class="tab-text">Downloader</span>
+        </button>
+        <button class="tab-button" id="tab-btn-enhancer" data-target="tab-enhancer" role="tab" aria-selected="false">
+          <span class="tab-icon">✦</span>
+          <span class="tab-text">Enhancer</span>
+        </button>
+        <div class="tab-slider-pill" id="tab-slider"></div>
+      </nav>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="acrylic-canvas">
+      <!-- TAB 1: Downloader -->
+      <section class="tab-panel active" id="tab-downloader" role="tabpanel">
+        <div class="card-hero">
+          <h1 class="hero-title">Download YouTube Stream</h1>
+          <p class="hero-subtitle">Fetches high-definition video and pristine audio merged into universal MP4 format</p>
+        </div>
+
+        <form class="action-form" id="download-form">
+          <!-- Acrylic Animated Input Field -->
+          <div class="acrylic-input-wrapper" id="url-input-wrapper">
+            <div class="ripple-host" id="url-ripple-host"></div>
+            <div class="conic-glow-border"></div>
+            <input 
+              type="text" 
+              class="acrylic-input-core" 
+              id="youtube-url-input" 
+              placeholder=" "
+              autocomplete="off"
+              spellcheck="false"
+              required
+            />
+            <label class="floating-acrylic-label" for="youtube-url-input">Paste YouTube video URL here...</label>
+            <button type="button" class="paste-button" id="paste-url-btn" title="Paste from clipboard">
+              <span class="paste-icon">📋</span>
+            </button>
+          </div>
+
+          <div class="form-submit-row">
+            <button type="submit" class="acrylic-action-btn" id="start-download-btn">
+              <span class="btn-spinner" id="download-spinner"></span>
+              <span class="btn-text">Start Download</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Live Download Status Card -->
+        <div class="status-card" id="download-status-card" style="display: none;">
+          <div class="status-header">
+            <span class="status-badge" id="download-status-badge">Processing</span>
+            <span class="status-filename" id="download-filename-display">Waiting for metadata...</span>
+          </div>
+
+          <div class="progress-track">
+            <div class="progress-fill" id="download-progress-bar" style="width: 0%;"></div>
+          </div>
+
+          <div class="status-metrics">
+            <div class="metric-block">
+              <span class="metric-label">Progress</span>
+              <span class="metric-value" id="metric-percent">0%</span>
+            </div>
+            <div class="metric-block">
+              <span class="metric-label">Transfer Speed</span>
+              <span class="metric-value" id="metric-speed">--</span>
+            </div>
+            <div class="metric-block">
+              <span class="metric-label">Time Remaining</span>
+              <span class="metric-value" id="metric-eta">--</span>
+            </div>
+          </div>
+          <p class="status-message" id="download-status-msg"></p>
+        </div>
+
+        <!-- Recent Downloads Section -->
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h2 class="sub-title">Recent Local Downloads</h2>
+            <button class="text-refresh-btn" id="refresh-recent-btn">Refresh</button>
+          </div>
+          <div class="recent-list-container" id="recent-downloads-list">
+            <div class="empty-list-placeholder">No recent media files located in Downloads/ytdownload.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: Enhancer -->
+      <section class="tab-panel" id="tab-enhancer" role="tabpanel">
+        <div class="card-hero">
+          <h1 class="hero-title">Video Clipper & Enhancer</h1>
+          <p class="hero-subtitle">High-fidelity unsharp filtering, CRF rate mastering, and rapid seeking for long files</p>
+        </div>
+
+        <form class="action-form" id="enhance-form">
+          <div class="form-field-group">
+            <label class="field-label">Source Video File Path</label>
+            <div class="acrylic-input-wrapper file-input-wrapper" id="file-input-wrapper">
+              <div class="ripple-host" id="file-ripple-host"></div>
+              <div class="conic-glow-border"></div>
+              <input 
+                type="text" 
+                class="acrylic-input-core" 
+                id="enhance-source-input" 
+                placeholder=" "
+                autocomplete="off"
+                spellcheck="false"
+                required
+              />
+              <label class="floating-acrylic-label" for="enhance-source-input">Path to video file (or select from recent below)...</label>
+            </div>
+          </div>
+
+          <div class="time-range-grid">
+            <div class="form-field-group">
+              <label class="field-label">Start Time (HH:MM:SS or seconds)</label>
+              <div class="acrylic-input-wrapper compact-wrapper" id="start-time-wrapper">
+                <div class="ripple-host"></div>
+                <div class="conic-glow-border"></div>
+                <input 
+                  type="text" 
+                  class="acrylic-input-core" 
+                  id="enhance-start-time" 
+                  placeholder=" "
+                />
+                <label class="floating-acrylic-label" for="enhance-start-time">e.g. 00:01:30 (blank = start)</label>
+              </div>
+            </div>
+
+            <div class="form-field-group">
+              <label class="field-label">End Time (HH:MM:SS or seconds)</label>
+              <div class="acrylic-input-wrapper compact-wrapper" id="end-time-wrapper">
+                <div class="ripple-host"></div>
+                <div class="conic-glow-border"></div>
+                <input 
+                  type="text" 
+                  class="acrylic-input-core" 
+                  id="enhance-end-time" 
+                  placeholder=" "
+                />
+                <label class="floating-acrylic-label" for="enhance-end-time">e.g. 00:03:00 (blank = end)</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-field-group">
+            <label class="field-label">Mastering Profile</label>
+            <div class="profile-selector">
+              <label class="profile-option">
+                <input type="radio" name="enhance-mode" value="crf" checked id="mode-crf">
+                <div class="profile-box">
+                  <span class="profile-title">High-Fidelity Perceptual (Recommended)</span>
+                  <span class="profile-desc">CRF 17, slow preset, unsharp edge filter, 320k AAC audio</span>
+                </div>
+              </label>
+
+              <label class="profile-option">
+                <input type="radio" name="enhance-mode" value="target_bitrate" id="mode-bitrate">
+                <div class="profile-box">
+                  <span class="profile-title">Explicit Target Bitrate</span>
+                  <span class="profile-desc">Fixed high-bitrate budget for video editing suites</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-field-group" id="bitrate-custom-group" style="display: none;">
+            <label class="field-label">Target Video Bitrate</label>
+            <div class="acrylic-input-wrapper compact-wrapper">
+              <div class="ripple-host"></div>
+              <div class="conic-glow-border"></div>
+              <input 
+                type="text" 
+                class="acrylic-input-core" 
+                id="enhance-bitrate-input" 
+                value="25M"
+                placeholder=" "
+              />
+              <label class="floating-acrylic-label" for="enhance-bitrate-input">e.g. 20M, 35M, 50M</label>
+            </div>
+          </div>
+
+          <div class="form-submit-row">
+            <button type="submit" class="acrylic-action-btn" id="start-enhance-btn">
+              <span class="btn-spinner" id="enhance-spinner"></span>
+              <span class="btn-text">Process & Enhance Video</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Live Enhancement Status Card -->
+        <div class="status-card" id="enhance-status-card" style="display: none;">
+          <div class="status-header">
+            <span class="status-badge" id="enhance-status-badge">Processing</span>
+            <span class="status-filename" id="enhance-filename-display">Running FFmpeg...</span>
+          </div>
+          <p class="status-message" id="enhance-status-msg">Initializing...</p>
+          <div class="output-path-box" id="enhance-output-path-box" style="display: none;">
+            <span class="output-label">Enhanced Output:</span>
+            <span class="output-value" id="enhance-output-path"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -5,7 +5,8 @@ This script checks for existing FFmpeg installations in the PATH environment var
 If FFmpeg is absent, the script downloads the latest release essentials ZIP archive from gyan.dev,
 extracts the archive to the Local AppData directory, and appends the bin directory
 to the persistent User PATH environment variable and the current session PATH variable.
-Additionally, the script invokes pip to install all Python dependencies defined in requirements.txt.
+Additionally, the script provisions an isolated Python virtual environment (.venv) if not already present,
+activates the environment, and invokes pip to install all dependencies from requirements.txt.
 #>
 
 [CmdletBinding()]
@@ -119,11 +120,46 @@ function Add-DirectoryToUserPath {
     }
 }
 
-function Install-PythonRequirements {
+function Ensure-VirtualEnvironment {
     <#
-    Installs Python dependencies declared in requirements.txt using pip.
+    Provisions a local isolated Python virtual environment (.venv) if absent,
+    and activates the environment for the current process session.
     #>
     param (
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectRoot
+    )
+
+    $venvDirectory = Join-Path $ProjectRoot ".venv"
+    $venvPython = Join-Path $venvDirectory "Scripts\python.exe"
+    $venvActivateScript = Join-Path $venvDirectory "Scripts\Activate.ps1"
+
+    if (-not (Test-Path $venvPython)) {
+        Write-Host "Creating virtual environment (.venv) to prevent dependency conflicts..." -ForegroundColor Cyan
+        & python -m venv $venvDirectory
+        if ($LASTEXITCODE -ne 0) {
+            throw "Virtual environment creation failed with exit code $LASTEXITCODE."
+        }
+        Write-Host "Virtual environment created successfully." -ForegroundColor Green
+    } else {
+        Write-Host "Existing virtual environment detected at $venvDirectory" -ForegroundColor Green
+    }
+
+    if (Test-Path $venvActivateScript) {
+        Write-Host "Activating virtual environment for active PowerShell session..." -ForegroundColor Cyan
+        & $venvActivateScript
+    }
+
+    return $venvPython
+}
+
+function Install-PythonRequirements {
+    <#
+    Installs Python dependencies declared in requirements.txt into the virtual environment.
+    #>
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$VenvPythonPath,
         [Parameter(Mandatory = $true)]
         [string]$RequirementsFilePath
     )
@@ -132,13 +168,8 @@ function Install-PythonRequirements {
         throw "Requirements file not found at: $RequirementsFilePath"
     }
 
-    $pythonCommand = Get-Command "python" -ErrorAction SilentlyContinue
-    if (-not $pythonCommand) {
-        throw "Python executable was not found on PATH. Ensure Python is installed and added to PATH."
-    }
-
-    Write-Host "Installing dependencies from $RequirementsFilePath using pip..." -ForegroundColor Cyan
-    & python -m pip install -r $RequirementsFilePath
+    Write-Host "Installing dependencies from $RequirementsFilePath into virtual environment..." -ForegroundColor Cyan
+    & $VenvPythonPath -m pip install -r $RequirementsFilePath
     if ($LASTEXITCODE -ne 0) {
         throw "pip installation failed with exit code $LASTEXITCODE."
     }
@@ -148,7 +179,7 @@ function Install-PythonRequirements {
 function Start-EnvironmentSetup {
     <#
     Coordinates the complete setup workflow: checking FFmpeg, downloading/installing if necessary,
-    registering PATH variables, and installing Python packages.
+    registering PATH variables, provisioning venv, and installing Python packages.
     #>
     Write-Host "=========================================" -ForegroundColor Magenta
     Write-Host " Starting YouTube Downloader Environment Setup " -ForegroundColor Magenta
@@ -171,16 +202,22 @@ function Start-EnvironmentSetup {
 
     $scriptRoot = $PSScriptRoot
     if (-not $scriptRoot) {
-        $scriptRoot = Get-Location
+        $scriptRoot = (Get-Location).Path
     }
 
+    $venvPythonPath = Ensure-VirtualEnvironment -ProjectRoot $scriptRoot
+
     $requirementsPath = Join-Path $scriptRoot "requirements.txt"
-    Install-PythonRequirements -RequirementsFilePath $requirementsPath
+    Install-PythonRequirements -VenvPythonPath $venvPythonPath -RequirementsFilePath $requirementsPath
 
     Write-Host "`nSetup completed successfully!" -ForegroundColor Green
     Write-Host "FFmpeg version verification:" -ForegroundColor Cyan
     & ffmpeg -version | Select-Object -First 1
+
+    Write-Host "`nReady to launch:" -ForegroundColor Cyan
+    Write-Host "  Web UI:    python run_web.py" -ForegroundColor White
+    Write-Host "  CLI Download: python download_video.py" -ForegroundColor White
+    Write-Host "  CLI Enhancer: python enhance_clip.py" -ForegroundColor White
 }
 
 Start-EnvironmentSetup
-

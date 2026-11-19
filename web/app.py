@@ -1,0 +1,315 @@
+"""
+Implementation details:
+FastAPI backend service providing REST and Server-Sent Events (SSE) interfaces.
+Coordinates asynchronous background execution of YouTube video downloads and FFmpeg media enhancement.
+Streams real-time progress metrics to connected web clients using persistent HTTP event streams.
+Discovers local media files in the designated download folder for quick selection within the UI.
+"""
+
+import asyncio
+import json
+import threading
+import uuid
+from pathlib import Path
+from typing import Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from core.downloader import (
+    resolve_download_directory,
+    validate_target_url,
+    download_youtube_video,
+)
+from core.enhancer import (
+    generate_output_path,
+    construct_ffmpeg_command,
+    execute_ffmpeg_process,
+)
+
+app = FastAPI(title="YouTube Downloader & Enhancer Web API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+active_jobs: dict[str, dict] = {}
+jobs_lock = threading.Lock()
+
+
+class DownloadRequest(BaseModel):
+    url: str
+
+
+class EnhanceRequest(BaseModel):
+    source_path: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    mode: str = "crf"
+    bitrate: Optional[str] = "25M"
+
+
+def update_job_status(job_id: str, **kwargs) -> None:
+    """
+    Updates operational metrics for a specific background job in a thread-safe manner.
+    """
+    with jobs_lock:
+        if job_id in active_jobs:
+            active_jobs[job_id].update(kwargs)
+
+
+def run_download_worker(job_id: str, target_url: str, output_directory: Path) -> None:
+    """
+    Executes yt-dlp download in a background thread and forwards progress to the job store.
+    """
+    def progress_callback(status_data: dict) -> None:
+        status = status_data.get("status", "downloading")
+        percent = status_data.get("_percent_str", "0%").strip()
+        speed = status_data.get("_speed_str", "N/A").strip()
+        eta = status_data.get("_eta_str", "N/A").strip()
+        filename = status_data.get("filename", "")
+
+        update_job_status(
+            job_id,
+            status=status,
+            percent=percent,
+            speed=speed,
+            eta=eta,
+            filename=Path(filename).name if filename else "",
+        )
+
+    try:
+        success, message = download_youtube_video(
+            video_url=target_url,
+            destination_directory=output_directory,
+            progress_callback=progress_callback,
+        )
+
+        if success:
+            update_job_status(job_id, status="completed", percent="100%", message="Download completed successfully.")
+        else:
+            update_job_status(job_id, status="failed", error=message)
+    except Exception as unexpected_error:
+        update_job_status(job_id, status="failed", error=str(unexpected_error))
+
+
+def run_enhance_worker(job_id: str, request_data: EnhanceRequest) -> None:
+    """
+    Executes FFmpeg clip extraction and re-encoding in a background thread.
+    """
+    source_file = Path(request_data.source_path.strip("\"'")).resolve()
+    if not source_file.is_file():
+        update_job_status(job_id, status="failed", error="Source video file does not exist.")
+        return
+
+    is_clipped = bool(request_data.start_time or request_data.end_time)
+    output_file = generate_output_path(source_file, is_clipped)
+
+    settings = {
+        "mode": request_data.mode,
+        "crf": "17",
+        "preset": "slow",
+        "bitrate": request_data.bitrate or "25M",
+        "filter": "unsharp=5:5:0.8:5:5:0.4",
+        "audio_bitrate": "320k",
+    }
+
+    command = construct_ffmpeg_command(
+        source_file=source_file,
+        output_file=output_file,
+        start_time=request_data.start_time,
+        end_time=request_data.end_time,
+        settings=settings,
+    )
+
+    update_job_status(
+        job_id,
+        status="processing",
+        message="Executing FFmpeg remuxing and enhancement filters...",
+        output_path=str(output_file),
+    )
+
+    success, message = execute_ffmpeg_process(command)
+
+    if success:
+        update_job_status(
+            job_id,
+            status="completed",
+            message=f"Enhancement complete. File saved to {output_file.name}",
+            output_path=str(output_file),
+        )
+    else:
+        update_job_status(job_id, status="failed", error=message)
+
+
+@app.post("/api/download")
+async def start_download(request: DownloadRequest):
+    """
+    Registers a new YouTube download operation and spawns an asynchronous worker thread.
+    """
+    clean_url = request.url.strip()
+    if not validate_target_url(clean_url):
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL supplied.")
+
+    job_id = str(uuid.uuid4())
+    output_directory = resolve_download_directory()
+
+    with jobs_lock:
+        active_jobs[job_id] = {
+            "id": job_id,
+            "type": "download",
+            "status": "starting",
+            "percent": "0%",
+            "speed": "Initializing...",
+            "eta": "Calculating...",
+            "filename": "",
+            "message": "Initializing connection to YouTube servers...",
+            "error": "",
+        }
+
+    worker_thread = threading.Thread(
+        target=run_download_worker,
+        args=(job_id, clean_url, output_directory),
+        daemon=True,
+    )
+    worker_thread.start()
+
+    return {"job_id": job_id, "status": "started"}
+
+
+@app.get("/api/download/stream/{job_id}")
+async def stream_download_progress(job_id: str):
+    """
+    Streams live download progress events over Server-Sent Events (SSE).
+    """
+    async def event_generator():
+        while True:
+            with jobs_lock:
+                job_data = active_jobs.get(job_id)
+
+            if not job_data:
+                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                break
+
+            yield f"data: {json.dumps(job_data)}\n\n"
+
+            if job_data.get("status") in ("completed", "failed"):
+                break
+
+            await asyncio.sleep(0.35)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+@app.post("/api/enhance")
+async def start_enhancement(request: EnhanceRequest):
+    """
+    Registers a new video enhancement/clipping operation and begins processing.
+    """
+    cleaned_path = request.source_path.strip("\"'")
+    file_path = Path(cleaned_path).resolve()
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail=f"File not found: {file_path}")
+
+    job_id = str(uuid.uuid4())
+    with jobs_lock:
+        active_jobs[job_id] = {
+            "id": job_id,
+            "type": "enhance",
+            "status": "starting",
+            "message": "Initializing FFmpeg process...",
+            "output_path": "",
+            "error": "",
+        }
+
+    worker_thread = threading.Thread(
+        target=run_enhance_worker,
+        args=(job_id, request),
+        daemon=True,
+    )
+    worker_thread.start()
+
+    return {"job_id": job_id, "status": "started"}
+
+
+@app.get("/api/enhance/stream/{job_id}")
+async def stream_enhance_progress(job_id: str):
+    """
+    Streams live enhancement progress events over Server-Sent Events (SSE).
+    """
+    async def event_generator():
+        while True:
+            with jobs_lock:
+                job_data = active_jobs.get(job_id)
+
+            if not job_data:
+                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                break
+
+            yield f"data: {json.dumps(job_data)}\n\n"
+
+            if job_data.get("status") in ("completed", "failed"):
+                break
+
+            await asyncio.sleep(0.4)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+@app.get("/api/recent-downloads")
+async def get_recent_downloads():
+    """
+    Scans the designated download directory and enumerates recently downloaded video files.
+    """
+    download_folder = resolve_download_directory()
+    valid_extensions = {".mp4", ".mkv", ".webm", ".avi", ".mov"}
+
+    files = []
+    if download_folder.is_dir():
+        for file_path in download_folder.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in valid_extensions:
+                try:
+                    stat = file_path.stat()
+                    size_mb = round(stat.st_size / (1024 * 1024), 2)
+                    files.append({
+                        "name": file_path.name,
+                        "path": str(file_path),
+                        "size_mb": size_mb,
+                        "modified": stat.st_mtime,
+                    })
+                except OSError:
+                    continue
+
+    files.sort(key=lambda item: item["modified"], reverse=True)
+    return {"downloads_directory": str(download_folder), "files": files[:15]}
+
+
+static_directory = Path(__file__).parent / "static"
+if static_directory.is_dir():
+    app.mount("/static", StaticFiles(directory=str(static_directory)), name="static")
+
+
+@app.get("/")
+async def serve_index():
+    """
+    Delivers the main application Single Page Application (SPA) entry document.
+    """
+    index_file = static_directory / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+    return {"message": "Static assets directory not initialized."}

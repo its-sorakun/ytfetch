@@ -1,16 +1,17 @@
 """
 Implementation details:
-This module extracts and enhances video clips from local media files using FFmpeg.
-The processing pipeline supports time-based seeking to isolate specific segments from long recordings,
-avoiding the need to process entire multi-hour files.
-Fast container-level seeking is employed by positioning seek flags prior to input stream declaration.
-Visual clarity is enhanced through unsharp mask filtering and perceptual rate-control encoding (CRF)
-or user-specified high bitrates, combined with high-fidelity 320 kbps AAC audio remuxing.
+Command-line interface entry point for video clipping and stream enhancement.
+Imports operational functions from the core.enhancer package to preserve separation of concerns.
+Coordinates console user interactions, time range input, configuration selection, and execution exit codes.
 """
 
-import subprocess
 import sys
 from pathlib import Path
+from core.enhancer import (
+    generate_output_path,
+    construct_ffmpeg_command,
+    execute_ffmpeg_process,
+)
 
 
 def prompt_for_input_file() -> Path:
@@ -83,99 +84,6 @@ def prompt_for_enhancement_settings() -> dict:
     }
 
 
-def generate_output_path(source_file: Path, is_clipped: bool) -> Path:
-    """
-    Derives an output file path adjacent to the source file with an informative naming suffix.
-    If a generated output filename collides with an existing file, a numeric index is incremented
-    to prevent unintended file overwrites.
-    """
-    suffix_tag = "_clip_enhanced" if is_clipped else "_enhanced"
-    directory = source_file.parent
-    base_stem = source_file.stem
-    target_extension = ".mp4"
-
-    candidate_name = f"{base_stem}{suffix_tag}{target_extension}"
-    candidate_path = directory / candidate_name
-
-    counter = 1
-    while candidate_path.exists():
-        candidate_name = f"{base_stem}{suffix_tag}_{counter}{target_extension}"
-        candidate_path = directory / candidate_name
-        counter += 1
-
-    return candidate_path
-
-
-def construct_ffmpeg_command(
-    source_file: Path,
-    output_file: Path,
-    start_time: str | None,
-    end_time: str | None,
-    settings: dict,
-) -> list[str]:
-    """
-    Assembles the FFmpeg CLI argument list with optimized flag ordering.
-    Positioning the start seek flag (-ss) before the input flag (-i) invokes container-level demuxer seeking,
-    jumping directly to nearest keyframes without decoding preceding hours of video content.
-    The -movflags +faststart parameter moves the MP4 MOOV atom to the beginning of the file for instant streaming.
-    """
-    command = ["ffmpeg", "-y"]
-
-    # Pre-input seeking dramatically accelerates start discovery on long media files
-    if start_time:
-        command.extend(["-ss", start_time])
-
-    if end_time:
-        command.extend(["-to", end_time])
-
-    command.extend(["-i", str(source_file)])
-
-    # Video filters: apply edge sharpening
-    if settings.get("filter"):
-        command.extend(["-vf", settings["filter"]])
-
-    # Video encoding codec and rate control
-    command.extend(["-c:v", "libx264"])
-
-    if settings["mode"] == "crf":
-        command.extend(["-crf", settings["crf"], "-preset", settings.get("preset", "slow")])
-    elif settings["mode"] == "target_bitrate":
-        command.extend(["-b:v", settings["bitrate"], "-preset", "slow"])
-
-    # High quality audio encoding
-    command.extend(["-c:a", "aac", "-b:a", settings.get("audio_bitrate", "320k")])
-
-    # Optimize MP4 container layout for immediate progressive playback
-    command.extend(["-movflags", "+faststart"])
-
-    command.append(str(output_file))
-    return command
-
-
-def execute_ffmpeg_process(ffmpeg_command: list[str]) -> bool:
-    """
-    Dispatches the constructed FFmpeg command to the operating system shell process.
-    Handles missing executable errors explicitly when FFmpeg is absent from PATH.
-    """
-    print("\nExecuting FFmpeg with configuration:")
-    print(" ".join(f'"{arg}"' if " " in arg else arg for arg in ffmpeg_command))
-    print()
-
-    try:
-        completed_process = subprocess.run(ffmpeg_command, check=True)
-        return completed_process.returncode == 0
-    except FileNotFoundError:
-        print(
-            "Error: FFmpeg executable was not discovered on system PATH. "
-            "Execute the setup.ps1 script to install and register FFmpeg.",
-            file=sys.stderr,
-        )
-        return False
-    except subprocess.CalledProcessError as process_error:
-        print(f"FFmpeg processing failed with exit code: {process_error.returncode}", file=sys.stderr)
-        return False
-
-
 def run_enhancer_cli() -> int:
     """
     Coordinates application initialization, input gathering, parameter generation, and FFmpeg execution.
@@ -206,14 +114,17 @@ def run_enhancer_cli() -> int:
         settings=settings,
     )
 
-    success = execute_ffmpeg_process(ffmpeg_args)
+    print("\nExecuting FFmpeg command:")
+    print(" ".join(f'"{arg}"' if " " in arg else arg for arg in ffmpeg_args))
+
+    success, message = execute_ffmpeg_process(ffmpeg_args)
     if success:
         print(f"\nProcessing complete! Enhanced video saved to: {destination_path}")
         return 0
 
+    print(f"\n{message}", file=sys.stderr)
     return 1
 
 
 if __name__ == "__main__":
     sys.exit(run_enhancer_cli())
-
